@@ -23,6 +23,7 @@ class _ProjectControllerState extends State<ProjectController> {
   late final BackendProcess _backend = BackendProcess(_client);
 
   ProjectState? _project;
+  List<RecentProject> _recentProjects = const [];
   ApiException? _error;
   bool _busy = true;
 
@@ -36,6 +37,7 @@ class _ProjectControllerState extends State<ProjectController> {
     final lastPath = await _store.readLastProjectPath();
     if (lastPath == null || !Directory(lastPath).existsSync()) {
       setState(() => _busy = false);
+      unawaited(_loadRecentProjects());
       return;
     }
     await _runProjectAction(() async {
@@ -63,6 +65,23 @@ class _ProjectControllerState extends State<ProjectController> {
     } finally {
       if (mounted) {
         setState(() => _busy = false);
+      }
+      if (_project == null) {
+        unawaited(_loadRecentProjects());
+      }
+    }
+  }
+
+  Future<void> _loadRecentProjects() async {
+    try {
+      await _backend.ensureStarted();
+      final envelope = await _client.recentProjects();
+      if (mounted) {
+        setState(() => _recentProjects = envelope.projects);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _recentProjects = const []);
       }
     }
   }
@@ -129,12 +148,17 @@ class _ProjectControllerState extends State<ProjectController> {
           await _store.saveLastProjectPath(value.rootPath);
           setState(() => _project = value);
         },
-        onCloseProject: () => setState(() => _project = null),
+        onCloseProject: () {
+          setState(() => _project = null);
+          unawaited(_loadRecentProjects());
+        },
       );
     }
     return StartupScreen(
       busy: _busy,
       error: _error,
+      recentProjects: _recentProjects,
+      onRefreshRecent: _loadRecentProjects,
       onCreate: _createProject,
       onOpen: _openProject,
     );

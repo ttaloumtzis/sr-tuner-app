@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../backend_client.dart';
+import '../classic_components.dart';
 import '../project_models.dart';
 
 class ModelTab extends StatefulWidget {
@@ -21,11 +22,18 @@ class ModelTab extends StatefulWidget {
 
 class _ModelTabState extends State<ModelTab> {
   final _name = TextEditingController(text: 'internal_x4');
+  ModelTemplateCatalog? _catalog;
+  ModelTemplate? _selected;
+  String _filter = 'all';
   int _scale = 4;
-  int _features = 32;
-  int _blocks = 4;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatalog();
+  }
 
   @override
   void dispose() {
@@ -33,18 +41,44 @@ class _ModelTabState extends State<ModelTab> {
     super.dispose();
   }
 
-  Future<void> _create() async {
+  Future<void> _loadCatalog() async {
+    try {
+      final catalog = await widget.client.modelTemplates(widget.project.id);
+      if (mounted) {
+        setState(() {
+          _catalog = catalog;
+          _selected = catalog.templates.isEmpty
+              ? null
+              : catalog.templates.first;
+          final template = _selected;
+          if (template != null && template.supportedScales.isNotEmpty) {
+            _scale = template.supportedScales.first;
+            _name.text = '${template.id}_x$_scale';
+          }
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    }
+  }
+
+  Future<void> _saveAsModel() async {
+    final template = _selected;
+    if (template == null) {
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final envelope = await widget.client.createModel(
+      final envelope = await widget.client.saveTemplateAsModel(
         projectId: widget.project.id,
+        templateId: template.id,
         name: _name.text.trim(),
         scale: _scale,
-        numFeatures: _features,
-        numBlocks: _blocks,
       );
       widget.onProjectChanged(envelope.project);
     } catch (error) {
@@ -58,159 +92,386 @@ class _ModelTabState extends State<ModelTab> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final catalog = _catalog;
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 340,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Create Model',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _name,
-                      decoration: const InputDecoration(labelText: 'Name'),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      initialValue: _scale,
-                      decoration: const InputDecoration(labelText: 'Scale'),
-                      items: const [2, 3, 4, 8]
-                          .map(
-                            (value) => DropdownMenuItem(
-                              value: value,
-                              child: Text('x$value'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() => _scale = value ?? 4),
-                    ),
-                    const SizedBox(height: 12),
-                    _NumberStepper(
-                      label: 'Features',
-                      value: _features,
-                      min: 8,
-                      max: 256,
-                      step: 8,
-                      onChanged: (value) => setState(() => _features = value),
-                    ),
-                    const SizedBox(height: 12),
-                    _NumberStepper(
-                      label: 'Blocks',
-                      value: _blocks,
-                      min: 1,
-                      max: 64,
-                      step: 1,
-                      onChanged: (value) => setState(() => _blocks = value),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _busy ? null : _create,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Model'),
-                    ),
-                    if (_busy) ...[
-                      const SizedBox(height: 12),
-                      const LinearProgressIndicator(),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ],
+      padding: EdgeInsets.all(tokens.gap),
+      child: catalog == null
+          ? Center(
+              child: _error == null
+                  ? const CircularProgressIndicator()
+                  : SrBanner(message: _error!, severity: 'error'),
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 390,
+                  child: _TemplateList(
+                    catalog: catalog,
+                    selected: _selected,
+                    filter: _filter,
+                    onFilter: (value) => setState(() => _filter = value),
+                    onSelect: (template) => setState(() {
+                      _selected = template;
+                      if (template.supportedScales.isNotEmpty) {
+                        _scale = template.supportedScales.first;
+                      }
+                      _name.text = '${template.id}_x$_scale';
+                    }),
+                  ),
                 ),
+                SizedBox(width: tokens.gap),
+                Expanded(
+                  child: _TemplateDetail(
+                    template: _selected,
+                    existingModels: widget.project.models,
+                    name: _name,
+                    scale: _scale,
+                    busy: _busy,
+                    error: _error,
+                    onScale: (value) => setState(() {
+                      _scale = value;
+                      final template = _selected;
+                      if (template != null) {
+                        _name.text = '${template.id}_x$_scale';
+                      }
+                    }),
+                    onReset: () {
+                      final template = _selected;
+                      if (template == null) {
+                        return;
+                      }
+                      setState(() {
+                        if (template.supportedScales.isNotEmpty) {
+                          _scale = template.supportedScales.first;
+                        }
+                        _name.text = '${template.id}_x$_scale';
+                      });
+                    },
+                    onSave: _saveAsModel,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _TemplateList extends StatelessWidget {
+  const _TemplateList({
+    required this.catalog,
+    required this.selected,
+    required this.filter,
+    required this.onFilter,
+    required this.onSelect,
+  });
+
+  final ModelTemplateCatalog catalog;
+  final ModelTemplate? selected;
+  final String filter;
+  final ValueChanged<String> onFilter;
+  final ValueChanged<ModelTemplate> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final filters = ['all', ...catalog.filters.values.expand((items) => items)];
+    final deduped = filters.toSet().toList();
+    final templates = catalog.templates.where((template) {
+      if (filter == 'all') {
+        return true;
+      }
+      return template.bestFor == filter ||
+          template.speedLabel == filter ||
+          template.supportState == filter;
+    }).toList();
+    return SrSection(
+      title: 'Templates',
+      subtitle: 'Metadata-first catalog with support guards',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final item in deduped)
+                ChoiceChip(
+                  label: Text(item),
+                  selected: filter == item,
+                  onSelected: (_) => onFilter(item),
+                ),
+            ],
+          ),
+          SizedBox(height: tokens.compactGap),
+          for (final template in templates)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                selected: selected?.id == template.id,
+                enabled: true,
+                leading: Icon(
+                  template.supportState == 'supported'
+                      ? Icons.memory
+                      : Icons.lock_outline,
+                ),
+                title: Text(template.displayName),
+                subtitle: Text(
+                  '${template.architectureSummary} · ${template.bestFor} · ${template.speedLabel}',
+                ),
+                trailing: SrChip(
+                  label: template.supportState,
+                  severity: template.supportState == 'supported'
+                      ? 'success'
+                      : 'warning',
+                ),
+                onTap: () => onSelect(template),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(child: _ModelList(models: widget.project.models)),
         ],
       ),
     );
   }
 }
 
-class _ModelList extends StatelessWidget {
-  const _ModelList({required this.models});
-
-  final List<ModelSummary> models;
-
-  @override
-  Widget build(BuildContext context) {
-    if (models.isEmpty) {
-      return const Center(child: Text('No models yet.'));
-    }
-    return ListView.separated(
-      itemCount: models.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final model = models[index];
-        return Card(
-          child: ListTile(
-            leading: const Icon(Icons.memory),
-            title: Text(model.name),
-            subtitle: Text(
-              '${model.architecture} · x${model.scale} · ${model.numFeatures} features · ${model.numBlocks} blocks',
-            ),
-            trailing: Text(model.status),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _NumberStepper extends StatelessWidget {
-  const _NumberStepper({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.step,
-    required this.onChanged,
+class _TemplateDetail extends StatelessWidget {
+  const _TemplateDetail({
+    required this.template,
+    required this.existingModels,
+    required this.name,
+    required this.scale,
+    required this.busy,
+    required this.onScale,
+    required this.onReset,
+    required this.onSave,
+    this.error,
   });
 
-  final String label;
-  final int value;
-  final int min;
-  final int max;
-  final int step;
-  final ValueChanged<int> onChanged;
+  final ModelTemplate? template;
+  final List<ModelSummary> existingModels;
+  final TextEditingController name;
+  final int scale;
+  final bool busy;
+  final ValueChanged<int> onScale;
+  final VoidCallback onReset;
+  final VoidCallback onSave;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final tokens = srTokens(context);
+    final value = template;
+    if (value == null) {
+      return const SrEmptyState(
+        title: 'Select a template',
+        message: 'Model templates load from the backend catalog.',
+        icon: Icons.memory,
+      );
+    }
+    final supported = value.supportState == 'supported';
+    return ListView(
       children: [
-        Expanded(child: Text('$label: $value')),
-        IconButton.outlined(
-          tooltip: 'Decrease $label',
-          onPressed: value <= min ? null : () => onChanged(value - step),
-          icon: const Icon(Icons.remove),
+        SrBanner(
+          title: 'Non-destructive switching',
+          message:
+              'Changing the selected template only edits the draft configuration. Existing datasets, runs, checkpoints, and inference records remain intact.',
+          severity: 'info',
         ),
-        const SizedBox(width: 8),
-        IconButton.outlined(
-          tooltip: 'Increase $label',
-          onPressed: value >= max ? null : () => onChanged(value + step),
-          icon: const Icon(Icons.add),
+        SizedBox(height: tokens.gap),
+        Row(
+          children: [
+            Expanded(
+              child: SrMetricCard(
+                label: 'Parameters',
+                value: value.parameterCount == null
+                    ? 'Unknown'
+                    : _formatCount(value.parameterCount!),
+              ),
+            ),
+            SizedBox(width: tokens.compactGap),
+            Expanded(
+              child: SrMetricCard(label: 'VRAM', value: value.vramEstimate),
+            ),
+            SizedBox(width: tokens.compactGap),
+            Expanded(
+              child: SrMetricCard(label: 'Crop', value: '${value.inputCrop}px'),
+            ),
+            SizedBox(width: tokens.compactGap),
+            Expanded(
+              child: SrMetricCard(
+                label: 'Scale',
+                value: value.supportedScales.map((item) => 'x$item').join(', '),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: tokens.gap),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SrSection(
+                title: value.displayName,
+                subtitle: value.architectureSummary,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!supported)
+                      SrBanner(
+                        message:
+                            value.unavailable?.message ??
+                            'This template is visible for planning but cannot be trained by the current backend.',
+                        severity: 'warning',
+                      ),
+                    SizedBox(height: tokens.compactGap),
+                    TextField(
+                      controller: name,
+                      decoration: const InputDecoration(
+                        labelText: 'Model name',
+                      ),
+                    ),
+                    SizedBox(height: tokens.compactGap),
+                    DropdownButtonFormField<int>(
+                      initialValue: scale,
+                      decoration: const InputDecoration(labelText: 'Scale'),
+                      items: [
+                        for (final item in value.supportedScales)
+                          DropdownMenuItem(value: item, child: Text('x$item')),
+                      ],
+                      onChanged: busy ? null : (item) => onScale(item ?? scale),
+                    ),
+                    SizedBox(height: tokens.compactGap),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: value.resetAction.supported && !busy
+                              ? onReset
+                              : null,
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('Reset to defaults'),
+                        ),
+                        FilledButton.icon(
+                          onPressed:
+                              supported &&
+                                  value.saveAsModelAction.supported &&
+                                  !busy
+                              ? onSave
+                              : null,
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text('Save as model'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: value.importAction.supported
+                              ? () {}
+                              : null,
+                          icon: const Icon(Icons.file_upload_outlined),
+                          label: const Text('Import template'),
+                        ),
+                      ],
+                    ),
+                    if (busy) ...[
+                      SizedBox(height: tokens.compactGap),
+                      const SrProgressBar(kind: SrProgressKind.indeterminate),
+                    ],
+                    if (error != null) ...[
+                      SizedBox(height: tokens.compactGap),
+                      SrBanner(message: error!, severity: 'error'),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: tokens.gap),
+            Expanded(
+              child: Column(
+                children: [
+                  SrSection(
+                    title: 'Architecture flow',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final step in value.architectureSteps)
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.arrow_forward),
+                            title: Text(step),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: tokens.gap),
+                  SrSection(
+                    title: 'Hyperparameters',
+                    child: Column(
+                      children: [
+                        for (final entry in value.hyperparameters.entries)
+                          _KeyValue(entry.key, entry.value.toString()),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: tokens.gap),
+        SrSection(
+          title: 'Project models',
+          child: existingModels.isEmpty
+              ? const Text('No saved models yet.')
+              : Column(
+                  children: [
+                    for (final model in existingModels)
+                      ListTile(
+                        leading: const Icon(Icons.memory),
+                        title: Text(model.name),
+                        subtitle: Text(
+                          '${model.architecture} · x${model.scale} · ${model.numFeatures} features · ${model.numBlocks} blocks',
+                        ),
+                        trailing: Text(model.status),
+                      ),
+                  ],
+                ),
         ),
       ],
     );
   }
+}
+
+class _KeyValue extends StatelessWidget {
+  const _KeyValue(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: srTokens(context).muted),
+            ),
+          ),
+          Text(value),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatCount(int value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
+  }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(1)}K';
+  }
+  return value.toString();
 }

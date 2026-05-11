@@ -31,6 +31,37 @@ from .checkpoints import (
     list_run_checkpoints,
     onnx_readiness,
 )
+from .classic_workspace import (
+    ActivityFeedResponse,
+    CheckpointAggregateResponse,
+    DashboardSummary,
+    DatasetDetailResponse,
+    InferenceInspectorResponse,
+    LiveRunDetailResponse,
+    ModelTemplateCatalogResponse,
+    RecentProjectsResponse,
+    SnapshotResponse,
+    TrainingEstimateResponse,
+    UnsupportedState,
+    VideoWizardMetadata,
+    WorkspacePreferencesResponse,
+    activity_feed,
+    checkpoint_aggregate,
+    dashboard_summary,
+    dataset_detail,
+    inference_inspector,
+    list_recent_projects,
+    live_detail,
+    model_template_catalog,
+    record_activity,
+    remember_recent_project,
+    save_template_as_model,
+    snapshot_checkpoint,
+    training_estimate,
+    update_workspace,
+    video_wizard_metadata,
+    workspace_preferences,
+)
 from .config import APP_NAME
 from .datasets import (
     DatasetObject,
@@ -117,6 +148,7 @@ def _project_response(project) -> ProjectResponse:
     if project.root_path is None:
         raise ApiError(500, "project_root_missing", "Project root is not bound for this session.", recoverable=False)
     _remember_project(project.root_path, project.id)
+    remember_recent_project(project)
     root = normalize_path(project.root_path)
     return ProjectResponse(project=project, project_id=project.id, root_path=str(root), project_file=str(root / "sr-tuner.project.json"))
 
@@ -168,16 +200,50 @@ def open_project_endpoint(
     return _project_response(project)
 
 
+@app.get("/projects/recent", response_model=RecentProjectsResponse)
+def recent_projects_endpoint() -> RecentProjectsResponse:
+    return list_recent_projects()
+
+
+@app.post("/projects/recent/open", response_model=ProjectResponse)
+def open_recent_project_endpoint(
+    request: OpenProjectRequest,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project = open_project(normalize_path(request.path))
+    project = recover_interrupted_runs(project)
+    return _project_response(project)
+
+
 @app.put("/projects/{project_id}/workspace", response_model=ProjectResponse)
 def save_workspace_endpoint(
     project_id: str,
     request: SaveWorkspaceRequest,
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
-    project = open_project(_session_project_path(project_id))
-    project.workspace.selected_tab = request.selected_tab
-    project = write_project(project)
+    project = update_workspace(
+        _session_project_path(project_id),
+        selected_tab=request.selected_tab,
+        theme=request.theme,
+        density=request.density,
+        per_project_ui_state=request.per_project_ui_state,
+    )
     return _project_response(project)
+
+
+@app.get("/projects/{project_id}/workspace", response_model=WorkspacePreferencesResponse)
+def workspace_preferences_endpoint(project_id: str) -> WorkspacePreferencesResponse:
+    return workspace_preferences(_session_project_path(project_id))
+
+
+@app.get("/projects/{project_id}/dashboard", response_model=DashboardSummary)
+def dashboard_endpoint(project_id: str) -> DashboardSummary:
+    return dashboard_summary(_session_project_path(project_id))
+
+
+@app.get("/projects/{project_id}/activity", response_model=ActivityFeedResponse)
+def activity_endpoint(project_id: str, limit: int = 20) -> ActivityFeedResponse:
+    return activity_feed(_session_project_path(project_id), limit=limit)
 
 
 @app.get("/projects/{project_id}/datasets", response_model=list[DatasetObject])
@@ -193,6 +259,8 @@ def register_paired_dataset_endpoint(
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
     project, _dataset, job = register_paired_dataset(_session_project_path(project_id), request)
+    project = record_activity(project, "dataset", f"Dataset {_dataset.name} registered.", severity="success" if _dataset.validation.usable else "warning", object_id=_dataset.id)
+    project = write_project(project)
     if job is not None:
         job.project_id = project.id
         job.object_id = _dataset.id
@@ -221,8 +289,35 @@ def generate_video_dataset_endpoint(
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
     project, _dataset, job = generate_video_dataset(_session_project_path(project_id), request)
+    project = record_activity(project, "dataset", f"Video dataset {_dataset.name} generated.", severity="success", object_id=_dataset.id)
+    project = write_project(project)
     job_store.put(job)
     return _project_response(project)
+
+
+@app.get("/projects/{project_id}/datasets/{dataset_id}/detail", response_model=DatasetDetailResponse)
+def dataset_detail_endpoint(project_id: str, dataset_id: str, preview_index: int = 0) -> DatasetDetailResponse:
+    return dataset_detail(_session_project_path(project_id), dataset_id, preview_index=preview_index)
+
+
+@app.post("/projects/{project_id}/datasets/video/metadata", response_model=VideoWizardMetadata)
+def video_wizard_metadata_endpoint(
+    project_id: str,
+    request: VideoGenerationConfig,
+    _token: None = Depends(require_session_token),
+) -> VideoWizardMetadata:
+    _session_project_path(project_id)
+    return video_wizard_metadata(request)
+
+
+@app.post("/projects/{project_id}/datasets/{dataset_id}/resynthesize", response_model=UnsupportedState)
+def dataset_resynthesis_endpoint(
+    project_id: str,
+    dataset_id: str,
+    _token: None = Depends(require_session_token),
+) -> UnsupportedState:
+    _session_project_path(project_id)
+    return UnsupportedState(code="resynthesis_unavailable", message="Re-synthesis creates a new dataset version, but this backend path is not implemented yet.")
 
 
 @app.get("/projects/{project_id}/models", response_model=list[ModelObject])
@@ -242,6 +337,26 @@ def create_model_endpoint(
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
     project, _model = create_model(_session_project_path(project_id), request)
+    project = record_activity(project, "model", f"Model {_model.name} configured.", object_id=_model.id)
+    project = write_project(project)
+    return _project_response(project)
+
+
+@app.get("/projects/{project_id}/model-templates", response_model=ModelTemplateCatalogResponse)
+def model_templates_endpoint(project_id: str) -> ModelTemplateCatalogResponse:
+    _session_project_path(project_id)
+    return model_template_catalog()
+
+
+@app.post("/projects/{project_id}/model-templates/{template_id}/save-as-model", response_model=ProjectResponse)
+def save_template_as_model_endpoint(
+    project_id: str,
+    template_id: str,
+    name: str,
+    scale: int = 4,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project = save_template_as_model(_session_project_path(project_id), template_id, name, scale)
     return _project_response(project)
 
 
@@ -289,7 +404,18 @@ def create_run_endpoint(
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
     project, _run = create_run(_session_project_path(project_id), request)
+    project = record_activity(project, "run", f"Run {_run.name} configured.", object_id=_run.id)
+    project = write_project(project)
     return _project_response(project)
+
+
+@app.post("/projects/{project_id}/training/estimate", response_model=TrainingEstimateResponse)
+def training_estimate_endpoint(
+    project_id: str,
+    request: RunSetupRequest,
+    _token: None = Depends(require_session_token),
+) -> TrainingEstimateResponse:
+    return training_estimate(_session_project_path(project_id), request)
 
 
 @app.get("/projects/{project_id}/runs/{run_id}", response_model=RunObject)
@@ -308,7 +434,10 @@ def launch_run_endpoint(
     initialize_run_metrics(_session_project_path(project_id), _run)
     job.project_id = project.id
     job_store.put(job)
-    return _project_response(open_project(_session_project_path(project_id)))
+    project = open_project(_session_project_path(project_id))
+    project = record_activity(project, "run", f"Run {_run.name} launched.", object_id=_run.id)
+    project = write_project(project)
+    return _project_response(project)
 
 
 @app.post("/projects/{project_id}/runs/{run_id}/pause", response_model=ProjectResponse)
@@ -367,6 +496,20 @@ def active_run_endpoint(project_id: str) -> ActiveRunStatus:
     return active_run_status(_session_project_path(project_id))
 
 
+@app.get("/projects/{project_id}/live/detail", response_model=LiveRunDetailResponse)
+def live_detail_endpoint(project_id: str) -> LiveRunDetailResponse:
+    return live_detail(_session_project_path(project_id))
+
+
+@app.post("/projects/{project_id}/runs/{run_id}/snapshot", response_model=SnapshotResponse)
+def snapshot_checkpoint_endpoint(
+    project_id: str,
+    run_id: str,
+    _token: None = Depends(require_session_token),
+) -> SnapshotResponse:
+    return snapshot_checkpoint(_session_project_path(project_id), run_id)
+
+
 @app.get("/projects/{project_id}/runs/{run_id}/metrics", response_model=MetricsResponse)
 def run_metrics_endpoint(project_id: str, run_id: str, limit: int = 200) -> MetricsResponse:
     return read_metrics(_session_project_path(project_id), run_id, limit=limit)
@@ -395,6 +538,11 @@ def onnx_readiness_endpoint() -> OnnxReadinessResponse:
 @app.get("/projects/{project_id}/checkpoints", response_model=ProjectCheckpointIndex)
 def project_checkpoints_endpoint(project_id: str) -> ProjectCheckpointIndex:
     return derive_project_checkpoints(_session_project_path(project_id))
+
+
+@app.get("/projects/{project_id}/checkpoints/aggregate", response_model=CheckpointAggregateResponse)
+def checkpoint_aggregate_endpoint(project_id: str) -> CheckpointAggregateResponse:
+    return checkpoint_aggregate(_session_project_path(project_id))
 
 
 @app.get("/projects/{project_id}/runs/{run_id}/checkpoints", response_model=CheckpointListResponse)
@@ -469,6 +617,11 @@ def run_inference_endpoint(
 @app.get("/projects/{project_id}/inference", response_model=InferenceHistoryResponse)
 def list_inference_endpoint(project_id: str) -> InferenceHistoryResponse:
     return list_inference_history(_session_project_path(project_id))
+
+
+@app.get("/projects/{project_id}/inference/inspector", response_model=InferenceInspectorResponse)
+def inference_inspector_endpoint(project_id: str) -> InferenceInspectorResponse:
+    return inference_inspector(_session_project_path(project_id))
 
 
 @app.post("/jobs", response_model=Job)

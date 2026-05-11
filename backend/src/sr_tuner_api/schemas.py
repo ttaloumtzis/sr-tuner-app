@@ -48,6 +48,9 @@ class OpenProjectRequest(BaseModel):
 class WorkspaceState(BaseModel):
     selected_tab: int = 0
     last_opened_at: str | None = None
+    theme: Literal["system", "light", "dark"] = "system"
+    density: Literal["comfortable", "compact"] = "comfortable"
+    per_project_ui_state: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectState(BaseModel):
@@ -77,7 +80,10 @@ class ProjectResponse(BaseModel):
 
 
 class SaveWorkspaceRequest(BaseModel):
-    selected_tab: int = Field(ge=0, le=5)
+    selected_tab: int | None = Field(default=None, ge=0, le=6)
+    theme: Literal["system", "light", "dark"] | None = None
+    density: Literal["comfortable", "compact"] | None = None
+    per_project_ui_state: dict[str, Any] | None = None
 
 
 class PathInfo(BaseModel):

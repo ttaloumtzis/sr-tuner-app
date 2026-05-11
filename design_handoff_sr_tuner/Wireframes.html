@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>sr-tuner · Wireframes (Direction B)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* a few canvas-level overrides for the design-canvas labels */
+  .dc-section-title, .dc-artboard-label, .dc-toolbar { font-family: "IBM Plex Sans", system-ui, sans-serif !important; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="wf-common.jsx"></script>
+  <script type="text/babel" src="wf-start.jsx"></script>
+  <script type="text/babel" src="wf-b-shell.jsx"></script>
+  <script type="text/babel" src="wf-b-train.jsx"></script>
+  <script type="text/babel" src="wf-b-rest.jsx"></script>
+
+  <script type="text/babel">
+    const { useEffect, useState } = React;
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "theme": "light",
+      "density": "comfortable"
+    }/*EDITMODE-END*/;
+
+    function App() {
+      const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+      useEffect(() => {
+        document.documentElement.setAttribute("data-theme", tweaks.theme);
+        document.documentElement.setAttribute("data-density", tweaks.density);
+      }, [tweaks.theme, tweaks.density]);
+
+      return (
+        <>
+          <DesignCanvas
+            title="sr-tuner · wireframes"
+            subtitle="Direction B — Classic Workspace. Low-fi but committed: IBM Plex, cool grey utility palette, one accent."
+          >
+            <DCSection id="intro" title="Premise">
+              <DCArtboard id="readme" label="What this is" width={920} height={540}>
+                <div style={{ padding: 32, fontFamily: "IBM Plex Sans, system-ui, sans-serif", height: "100%", display: "flex", flexDirection: "column", gap: 14, background: "var(--surface)" }}>
+                  <div className="label">sr-tuner · v0.4 · wireframes round 2</div>
+                  <div className="h1" style={{ maxWidth: 720 }}>Direction B — Classic Workspace, polished.</div>
+                  <div className="txt-sm soft" style={{ maxWidth: 700 }}>
+                    Six top-level tabs (Dataset · Model · Training · Live · Checkpoints · Inference) plus an Overview project home.
+                    Below: every tab in its <b>populated</b> state, then the <b>empty</b> / <b>blocked</b> / <b>error</b> variants
+                    that catch beginners when something isn't there yet.
+                  </div>
+                  <div className="hdiv" style={{ margin: "8px 0" }}/>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, fontSize: 13 }}>
+                    <div className="col gap-4">
+                      <div className="label">Type</div>
+                      <div>IBM Plex Sans 400 / 500 / 600</div>
+                      <div className="mono">IBM Plex Mono · numerics, paths, hyperparams</div>
+                    </div>
+                    <div className="col gap-4">
+                      <div className="label">Palette</div>
+                      <div className="row gap-4">
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--bg)",       border: "1px solid var(--line)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--surface)",  border: "1px solid var(--line)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--surface-2)",border: "1px solid var(--line)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--line)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--ink-2)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--accent)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--accent-2)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--warn)" }}/>
+                        <span style={{ width: 18, height: 18, borderRadius: 3, background: "var(--danger)" }}/>
+                      </div>
+                      <div className="txt-xs muted">cool greys + single blue accent · green/amber/red for status only</div>
+                    </div>
+                    <div className="col gap-4">
+                      <div className="label">Progress, meaningfully</div>
+                      <div className="bar"><div className="fill striped" style={{ width: "60%" }}/></div>
+                      <div className="txt-xs muted">striped = "in progress" (iters within epoch) · solid = "% complete"</div>
+                      <div className="bar"><div className="fill" style={{ width: "42%" }}/></div>
+                    </div>
+                  </div>
+                  <div className="hdiv" style={{ margin: "8px 0" }}/>
+                  <div className="row gap-8 wrap">
+                    <span className="chip">→ Start</span>
+                    <span className="chip">→ Overview</span>
+                    <span className="chip">→ Dataset (filled · empty · video-import)</span>
+                    <span className="chip">→ Model</span>
+                    <span className="chip">→ Training</span>
+                    <span className="chip">→ Live (running · empty · OOM error)</span>
+                    <span className="chip">→ Checkpoints (filled · empty)</span>
+                    <span className="chip">→ Inference (working · blocked)</span>
+                  </div>
+                </div>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="entry" title="Entry — opening sr-tuner">
+              <DCArtboard id="start" label="Start screen · project picker" width={1120} height={720}>
+                <WFStart/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="happy" title="Happy path — a project mid-training">
+              <DCArtboard id="overview" label="Overview · project home" width={1280} height={760}>
+                <OverviewTab/>
+              </DCArtboard>
+              <DCArtboard id="dataset" label="Dataset · sources, pairs, health" width={1280} height={760}>
+                <DatasetTab/>
+              </DCArtboard>
+              <DCArtboard id="model" label="Model · pick template, see architecture" width={1280} height={760}>
+                <ModelTab/>
+              </DCArtboard>
+              <DCArtboard id="training" label="Training · setup the next run" width={1280} height={760}>
+                <TrainingTab/>
+              </DCArtboard>
+              <DCArtboard id="live" label="Live · run-003 epoch 42 of 100" width={1280} height={760}>
+                <LiveTab/>
+              </DCArtboard>
+              <DCArtboard id="checkpoints" label="Checkpoints · pick the best one" width={1280} height={760}>
+                <CheckpointsTab/>
+              </DCArtboard>
+              <DCArtboard id="inference" label="Inference · before/after × 4" width={1280} height={760}>
+                <InferenceTab/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="flows" title="A flow that beginners need — make dataset from a video">
+              <DCArtboard id="dataset-empty" label="Step 0 · empty dataset (three on-ramps)" width={1280} height={760}>
+                <DatasetEmptyTab/>
+              </DCArtboard>
+              <DCArtboard id="dataset-video" label="Step 1 · extract frames · sampling" width={1280} height={760}>
+                <DatasetFromVideo/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="states" title="Empty · blocked · error states (the ones that catch beginners)">
+              <DCArtboard id="live-empty" label="Live · no run started" width={1280} height={760}>
+                <LiveEmptyTab/>
+              </DCArtboard>
+              <DCArtboard id="live-error" label="Live · CUDA out-of-memory" width={1280} height={760}>
+                <LiveErrorTab/>
+              </DCArtboard>
+              <DCArtboard id="checkpoints-empty" label="Checkpoints · before first run" width={1280} height={760}>
+                <CheckpointsEmptyTab/>
+              </DCArtboard>
+              <DCArtboard id="inference-blocked" label="Inference · blocked until a checkpoint exists" width={1280} height={760}>
+                <InferenceBlockedTab/>
+              </DCArtboard>
+            </DCSection>
+
+          </DesignCanvas>
+
+          <TweaksPanel title="Tweaks">
+            <TweakSection title="Appearance">
+              <TweakRadio
+                label="Theme"
+                value={tweaks.theme}
+                onChange={(v) => setTweak("theme", v)}
+                options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
+              />
+              <TweakRadio
+                label="Density"
+                value={tweaks.density}
+                onChange={(v) => setTweak("density", v)}
+                options={[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }]}
+              />
+            </TweakSection>
+          </TweaksPanel>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+/* sr-tuner — low-fi wireframes · cool/neutral utility palette */
+
+:root {
+  --bg:        #eef0f3;
+  --surface:   #ffffff;
+  --surface-2: #f7f8fa;
+  --line:      #c8ccd2;
+  --line-2:    #dee1e6;
+  --ink:       #1a1d22;
+  --ink-2:     #3a4049;
+  --muted:     #6b7280;
+  --faint:     #9aa1ab;
+  --accent:    #2f6bd6;
+  --accent-2:  #1f8a5b;
+  --warn:      #b06320;
+  --danger:    #b3382f;
+  --tint:      #e7eef9;     /* accent tint */
+  --tint-ok:   #e2efe7;
+  --tint-warn: #f4ebdd;
+  --tint-err:  #f4dedb;
+  --shadow:    0 1px 0 rgba(20,25,35,0.04), 0 2px 6px rgba(20,25,35,0.06);
+  --radius:    4px;
+}
+
+[data-theme="dark"] {
+  --bg:        #0d1016;
+  --surface:   #161a21;
+  --surface-2: #1c2028;
+  --line:      #2a2f38;
+  --line-2:    #20242c;
+  --ink:       #e6e9ee;
+  --ink-2:     #b8bdc6;
+  --muted:     #8b929c;
+  --faint:     #5a616b;
+  --accent:    #5b8df0;
+  --accent-2:  #5fbf8a;
+  --warn:      #d99a55;
+  --danger:    #df6a5e;
+  --tint:      #1a2436;
+  --tint-ok:   #15281f;
+  --tint-warn: #2a2118;
+  --tint-err:  #2a1814;
+  --shadow:    0 1px 0 rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.45);
+}
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+
+/* type ----------------------------------------------------- */
+.h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+.h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.005em; line-height: 1.2; }
+.h3 { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.txt  { font-size: 13px; }
+.txt-sm { font-size: 12px; color: var(--ink-2); }
+.txt-xs { font-size: 11px; color: var(--muted); }
+.mono { font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.soft  { color: var(--ink-2); }
+b, strong { font-weight: 600; }
+
+/* shapes --------------------------------------------------- */
+.sk {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.sk.flat { background: transparent; }
+.sk.tint { background: var(--surface-2); }
+.sk.dashed { border-style: dashed; background: transparent; }
+.sk.elev { box-shadow: var(--shadow); }
+
+/* primitives ----------------------------------------------- */
+.row { display: flex; align-items: center; gap: 8px; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.center { display: flex; align-items: center; justify-content: center; }
+
+.gap-2 { gap: 2px; } .gap-4 { gap: 4px; } .gap-6 { gap: 6px; }
+.gap-8 { gap: 8px; } .gap-12 { gap: 12px; } .gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; } .gap-24 { gap: 24px; }
+
+.p-4 { padding: 4px; } .p-6 { padding: 6px; } .p-8 { padding: 8px; }
+.p-12 { padding: 12px; } .p-14 { padding: 14px; } .p-16 { padding: 16px; }
+.p-20 { padding: 20px; } .p-24 { padding: 24px; }
+
+/* buttons -------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(0.95); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
+.btn.danger { color: var(--danger); border-color: var(--line); }
+.btn.sm { font-size: 11px; padding: 3px 8px; }
+.btn.lg { font-size: 13px; padding: 8px 14px; }
+.btn.icon { padding: 5px 6px; }
+.btn:disabled, .btn[aria-disabled="true"] { color: var(--faint); border-color: var(--line-2); background: transparent; cursor: not-allowed; }
+
+/* chips ---------------------------------------------------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chip.solid { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip.ok    { background: var(--tint-ok);   border-color: transparent; color: var(--accent-2); }
+.chip.warn  { background: var(--tint-warn); border-color: transparent; color: var(--warn); }
+.chip.err   { background: var(--tint-err);  border-color: transparent; color: var(--danger); }
+.chip.tint  { background: var(--tint);      border-color: transparent; color: var(--accent); }
+
+/* tabs ----------------------------------------------------- */
+.tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 8px 12px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+.tab:hover { color: var(--ink-2); }
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.tab.locked { color: var(--faint); }
+
+/* fields --------------------------------------------------- */
+.field {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--ink);
+}
+.field.disabled { color: var(--faint); background: var(--surface-2); }
+.field .grow { color: inherit; }
+.field-label {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+/* progress bar (real meaning: epoch progress) ------------- */
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-2);
+  overflow: hidden;
+  position: relative;
+}
+.bar > .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+.bar > .fill.striped {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent) 0 6px,
+    rgba(255,255,255,0.35) 6px 10px
+  );
+}
+
+/* metric card --------------------------------------------- */
+.metric {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.metric .key {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.metric .val {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 20px; font-weight: 500; color: var(--ink);
+  line-height: 1.1;
+}
+.metric .sub { font-size: 11px; color: var(--muted); }
+
+/* image placeholder --------------------------------------- */
+.img-ph {
+  border: 1px dashed var(--line);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--faint);
+}
+.img-ph::before {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(135deg, transparent 49.5%, currentColor 49.5% 50.5%, transparent 50.5%),
+    linear-gradient(45deg,  transparent 49.5%, currentColor 49.5% 50.5%, transparent 50.5%);
+  opacity: 0.15;
+}
+.img-ph > span {
+  position: relative; z-index: 1;
+  background: var(--surface);
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* dot indicator ------------------------------------------- */
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.dot.accent { background: var(--accent); }
+.dot.ok { background: var(--accent-2); }
+.dot.warn { background: var(--warn); }
+.dot.err { background: var(--danger); }
+.dot.live { background: var(--accent); box-shadow: 0 0 0 0 var(--accent); animation: pulse 1.6s infinite; }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* dividers ------------------------------------------------- */
+.vdiv { width: 1px; background: var(--line); align-self: stretch; }
+.hdiv { height: 1px; background: var(--line); width: 100%; }
+
+/* window chrome ------------------------------------------- */
+.win {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.win .titlebar {
+  height: 32px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.win .traffic { display: flex; gap: 6px; }
+.win .traffic .light { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); }
+.win .traffic .light.r { background: #e57368; border-color: #c8584d; }
+.win .traffic .light.y { background: #e9c25f; border-color: #c9a039; }
+.win .traffic .light.g { background: #7fc8a3; border-color: #5aa482; }
+[data-theme="dark"] .win .traffic .light.r { background: #d96658; border-color: transparent; }
+[data-theme="dark"] .win .traffic .light.y { background: #d4a93f; border-color: transparent; }
+[data-theme="dark"] .win .traffic .light.g { background: #5eaa83; border-color: transparent; }
+
+.win .title { font-size: 11px; color: var(--muted); font-weight: 500; }
+.win .body { flex: 1; display: flex; min-height: 0; min-width: 0; }
+
+/* sidebar nav item ---------------------------------------- */
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.nav-item.active { background: var(--tint); color: var(--accent); font-weight: 500; }
+.nav-item .badge {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* "empty state" zone -------------------------------------- */
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 32px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--surface-2);
+  text-align: center;
+}
+.empty .icon-wrap {
+  width: 36px; height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+/* density: compact tweak ---------------------------------- */
+[data-density="compact"] .p-12 { padding: 8px; }
+[data-density="compact"] .p-16 { padding: 12px; }
+[data-density="compact"] .p-20 { padding: 14px; }
+[data-density="compact"] .gap-12 { gap: 8px; }
+[data-density="compact"] .gap-16 { gap: 10px; }
+[data-density="compact"] .metric { padding: 8px 10px; }
+[data-density="compact"] .metric .val { font-size: 17px; }
+
+/* status banner ------------------------------------------- */
+.banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
+}
+.banner.ok    { border-left-color: var(--accent-2); background: var(--tint-ok); }
+.banner.warn  { border-left-color: var(--warn);     background: var(--tint-warn); }
+.banner.err   { border-left-color: var(--danger);   background: var(--tint-err); }
+.banner.info  { border-left-color: var(--accent);   background: var(--tint); }
+
+.banner .col { gap: 2px; flex: 1; }
+.banner b { font-weight: 600; }
+
+/* small kbd ---------------------------------------------- */
+.kbd {
+  display: inline-block;
+  padding: 0 5px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}

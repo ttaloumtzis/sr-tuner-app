@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 
 import 'app_config.dart';
 import 'backend_client.dart';
+import 'classic_components.dart';
 import 'path_picker.dart';
+import 'project_models.dart';
 
 class StartupScreen extends StatefulWidget {
   const StartupScreen({
     required this.busy,
     required this.error,
+    required this.recentProjects,
+    required this.onRefreshRecent,
     required this.onCreate,
     required this.onOpen,
     super.key,
@@ -17,6 +21,8 @@ class StartupScreen extends StatefulWidget {
 
   final bool busy;
   final ApiException? error;
+  final List<RecentProject> recentProjects;
+  final Future<void> Function() onRefreshRecent;
   final Future<void> Function(String parentPath, String name, {bool createHere})
   onCreate;
   final Future<void> Function(String path) onOpen;
@@ -30,6 +36,8 @@ class _StartupScreenState extends State<StartupScreen> {
   late final TextEditingController _parentController;
   late final TextEditingController _nameController;
   late final TextEditingController _openController;
+  late final TextEditingController _searchController;
+  String _filter = 'all';
 
   @override
   void initState() {
@@ -38,6 +46,8 @@ class _StartupScreenState extends State<StartupScreen> {
     _parentController = TextEditingController(text: '$home/projects');
     _nameController = TextEditingController(text: 'sr_project');
     _openController = TextEditingController();
+    _searchController = TextEditingController();
+    _searchController.addListener(() => setState(() {}));
   }
 
   @override
@@ -45,6 +55,7 @@ class _StartupScreenState extends State<StartupScreen> {
     _parentController.dispose();
     _nameController.dispose();
     _openController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -63,135 +74,90 @@ class _StartupScreenState extends State<StartupScreen> {
     }
   }
 
+  List<RecentProject> get _filteredRecent {
+    final query = _searchController.text.trim().toLowerCase();
+    return [
+      for (final project in widget.recentProjects)
+        if ((_filter == 'all' || project.status == _filter) &&
+            (query.isEmpty ||
+                project.name.toLowerCase().contains(query) ||
+                project.path.toLowerCase().contains(query)))
+          project,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tokens = srTokens(context);
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  AppConfig.appName,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: Padding(
+              padding: EdgeInsets.all(tokens.gap),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Header(error: widget.error),
+                  SizedBox(height: tokens.gap),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final narrow = constraints.maxWidth < 860;
+                        final left = _CreateOpenColumn(
+                          busy: widget.busy,
+                          parentController: _parentController,
+                          nameController: _nameController,
+                          openController: _openController,
+                          onPickCreateParent: _pickCreateParent,
+                          onPickOpenFolder: _pickOpenFolder,
+                          onCreate: widget.onCreate,
+                          onOpen: widget.onOpen,
+                        );
+                        final right = _RecentColumn(
+                          busy: widget.busy,
+                          searchController: _searchController,
+                          filter: _filter,
+                          recentProjects: _filteredRecent,
+                          onFilterChanged: (value) =>
+                              setState(() => _filter = value),
+                          onRefresh: widget.onRefreshRecent,
+                          onOpen: widget.onOpen,
+                        );
+                        if (narrow) {
+                          return ListView(
+                            children: [
+                              left,
+                              SizedBox(height: tokens.gap),
+                              right,
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(width: 390, child: left),
+                            SizedBox(width: tokens.gap),
+                            Expanded(child: right),
+                          ],
+                        );
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Local super-resolution workstation',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: 40),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _ActionPanel(
-                        title: 'Create Project',
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _parentController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Parent folder',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton.outlined(
-                                tooltip: 'Select parent folder',
-                                onPressed: widget.busy
-                                    ? null
-                                    : _pickCreateParent,
-                                icon: const Icon(Icons.folder_open),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Project name',
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: widget.busy
-                                ? null
-                                : () => widget.onCreate(
-                                    _parentController.text.trim(),
-                                    _nameController.text.trim(),
-                                  ),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Create Project'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _ActionPanel(
-                        title: 'Open Project',
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _openController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Project folder',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton.outlined(
-                                tooltip: 'Select project folder',
-                                onPressed: widget.busy ? null : _pickOpenFolder,
-                                icon: const Icon(Icons.folder_open),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          OutlinedButton.icon(
-                            onPressed: widget.busy
-                                ? null
-                                : () => widget.onOpen(
-                                    _openController.text.trim(),
-                                  ),
-                            icon: const Icon(Icons.folder_open),
-                            label: const Text('Open Project'),
-                          ),
-                        ],
-                      ),
-                    ),
+                  if (widget.busy) ...[
+                    SizedBox(height: tokens.compactGap),
+                    const SrProgressBar(kind: SrProgressKind.indeterminate),
                   ],
-                ),
-                if (widget.busy) ...[
-                  const SizedBox(height: 24),
-                  const LinearProgressIndicator(),
-                ],
-                if (widget.error != null) ...[
-                  const SizedBox(height: 24),
-                  SelectableText(
-                    widget.error!.toString(),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  SizedBox(height: tokens.compactGap),
+                  Text(
+                    'Projects are folders. Move the folder when needed; sr-tuner finds the canonical sr-tuner.project.json manifest inside it. .srtproj archive import is planned and disabled in this build.',
+                    style: TextStyle(color: tokens.muted),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                   ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -200,23 +166,329 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 }
 
-class _ActionPanel extends StatelessWidget {
-  const _ActionPanel({required this.title, required this.children});
+class _Header extends StatelessWidget {
+  const _Header({required this.error});
 
-  final String title;
-  final List<Widget> children;
+  final ApiException? error;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    final tokens = srTokens(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            ...children,
+            Text(
+              AppConfig.appName,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const SrChip(label: 'Classic Workspace', selected: true),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: const [
+            SrChip(label: 'Train from paired images', icon: Icons.grid_view),
+            SrChip(label: 'Extract frames from video', icon: Icons.movie),
+            SrChip(label: 'Run local inference', icon: Icons.auto_awesome),
+          ],
+        ),
+        if (error != null) ...[
+          SizedBox(height: tokens.compactGap),
+          SrBanner(
+            title: error!.code,
+            message: error!.message,
+            severity: 'error',
+            icon: Icons.error_outline,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CreateOpenColumn extends StatelessWidget {
+  const _CreateOpenColumn({
+    required this.busy,
+    required this.parentController,
+    required this.nameController,
+    required this.openController,
+    required this.onPickCreateParent,
+    required this.onPickOpenFolder,
+    required this.onCreate,
+    required this.onOpen,
+  });
+
+  final bool busy;
+  final TextEditingController parentController;
+  final TextEditingController nameController;
+  final TextEditingController openController;
+  final VoidCallback onPickCreateParent;
+  final VoidCallback onPickOpenFolder;
+  final Future<void> Function(String parentPath, String name, {bool createHere})
+  onCreate;
+  final Future<void> Function(String path) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SrSection(
+          title: 'New project',
+          subtitle: 'Create a folder-backed workspace.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PathField(
+                controller: parentController,
+                label: 'Parent folder',
+                onPick: busy ? null : onPickCreateParent,
+              ),
+              SizedBox(height: tokens.compactGap),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Project name'),
+              ),
+              SizedBox(height: tokens.compactGap),
+              FilledButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => onCreate(
+                        parentController.text.trim(),
+                        nameController.text.trim(),
+                      ),
+                icon: const Icon(Icons.add),
+                label: const Text('Create Project'),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: tokens.gap),
+        SrSection(
+          title: 'Open project folder',
+          subtitle: 'Select a folder containing sr-tuner.project.json.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PathField(
+                controller: openController,
+                label: 'Project folder',
+                onPick: busy ? null : onPickOpenFolder,
+              ),
+              SizedBox(height: tokens.compactGap),
+              OutlinedButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => onOpen(openController.text.trim()),
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Open Project'),
+              ),
+              SizedBox(height: tokens.compactGap),
+              OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.inventory_2_outlined),
+                label: const Text('Import .srtproj archive'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PathField extends StatelessWidget {
+  const _PathField({
+    required this.controller,
+    required this.label,
+    required this.onPick,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final VoidCallback? onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            decoration: InputDecoration(labelText: label),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Choose folder',
+          onPressed: onPick,
+          icon: const Icon(Icons.folder_open),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentColumn extends StatelessWidget {
+  const _RecentColumn({
+    required this.busy,
+    required this.searchController,
+    required this.filter,
+    required this.recentProjects,
+    required this.onFilterChanged,
+    required this.onRefresh,
+    required this.onOpen,
+  });
+
+  final bool busy;
+  final TextEditingController searchController;
+  final String filter;
+  final List<RecentProject> recentProjects;
+  final ValueChanged<String> onFilterChanged;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function(String path) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return SrSection(
+      title: 'Recent projects',
+      subtitle: 'Filter local project folders before opening.',
+      trailing: IconButton(
+        tooltip: 'Refresh recent projects',
+        onPressed: busy ? null : onRefresh,
+        icon: const Icon(Icons.refresh),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: searchController,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    labelText: 'Search recent projects',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'all', label: Text('All')),
+                  ButtonSegment(value: 'available', label: Text('Ready')),
+                  ButtonSegment(value: 'missing', label: Text('Missing')),
+                ],
+                selected: {filter},
+                onSelectionChanged: (values) => onFilterChanged(values.first),
+              ),
+            ],
+          ),
+          SizedBox(height: tokens.compactGap),
+          if (recentProjects.isEmpty)
+            const SizedBox(
+              height: 280,
+              child: SrEmptyState(
+                title: 'No recent projects',
+                message: 'Create or open a project folder to pin it here.',
+                icon: Icons.history,
+              ),
+            )
+          else
+            SizedBox(
+              height: 430,
+              child: ListView.separated(
+                itemCount: recentProjects.length,
+                separatorBuilder: (_, index) =>
+                    SizedBox(height: tokens.compactGap),
+                itemBuilder: (context, index) {
+                  final project = recentProjects[index];
+                  return _RecentCard(
+                    project: project,
+                    onOpen: project.status == 'available'
+                        ? () => onOpen(project.path)
+                        : null,
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentCard extends StatelessWidget {
+  const _RecentCard({required this.project, required this.onOpen});
+
+  final RecentProject project;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final severity = project.status == 'available'
+        ? 'success'
+        : project.status == 'missing'
+        ? 'warning'
+        : 'error';
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(tokens.radius),
+      child: Container(
+        padding: EdgeInsets.all(tokens.compactGap),
+        decoration: BoxDecoration(
+          border: Border.all(color: tokens.border),
+          borderRadius: BorderRadius.circular(tokens.radius),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.folder_outlined, color: tokens.accent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    project.path,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: tokens.muted),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      SrChip(label: project.status, severity: severity),
+                      SrChip(label: '${project.summary.datasetCount} datasets'),
+                      SrChip(label: '${project.summary.runCount} runs'),
+                      SrChip(label: '${project.summary.checkpointCount} ckpts'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: onOpen == null ? project.statusMessage : 'Open project',
+              onPressed: onOpen,
+              icon: const Icon(Icons.chevron_right),
+            ),
           ],
         ),
       ),

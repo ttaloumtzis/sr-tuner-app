@@ -54,14 +54,47 @@ class BackendClient {
     return ProjectEnvelope.fromJson(response);
   }
 
+  Future<RecentProjectsEnvelope> recentProjects() async {
+    return RecentProjectsEnvelope.fromJson(await _get('/projects/recent'));
+  }
+
+  Future<ProjectEnvelope> openRecentProject(String path) async {
+    final response = await _post('/projects/recent/open', {'path': path});
+    return ProjectEnvelope.fromJson(response);
+  }
+
   Future<ProjectEnvelope> saveWorkspace({
     required String projectId,
-    required int selectedTab,
+    int? selectedTab,
+    String? theme,
+    String? density,
+    Map<String, dynamic>? perProjectUiState,
   }) async {
     final response = await _put('/projects/$projectId/workspace', {
-      'selected_tab': selectedTab,
+      'selected_tab': ?selectedTab,
+      'theme': ?theme,
+      'density': ?density,
+      'per_project_ui_state': ?perProjectUiState,
     });
     return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<WorkspacePreferences> workspacePreferences(String projectId) async {
+    return WorkspacePreferences.fromJson(
+      await _get('/projects/$projectId/workspace'),
+    );
+  }
+
+  Future<DashboardSummary> dashboardSummary(String projectId) async {
+    return DashboardSummary.fromJson(
+      await _get('/projects/$projectId/dashboard'),
+    );
+  }
+
+  Future<ActivityFeedEnvelope> activityFeed(String projectId) async {
+    return ActivityFeedEnvelope.fromJson(
+      await _get('/projects/$projectId/activity'),
+    );
   }
 
   Future<List<DatasetSummary>> listDatasets(String projectId) async {
@@ -107,6 +140,48 @@ class BackendClient {
     return VideoReadiness.fromJson(await _get('/dependencies/video'));
   }
 
+  Future<DatasetDetail> datasetDetail({
+    required String projectId,
+    required String datasetId,
+    int previewIndex = 0,
+  }) async {
+    return DatasetDetail.fromJson(
+      await _get(
+        '/projects/$projectId/datasets/$datasetId/detail?preview_index=$previewIndex',
+      ),
+    );
+  }
+
+  Future<VideoWizardMetadata> videoWizardMetadata({
+    required String projectId,
+    required String name,
+    required String sourceVideo,
+    required int scale,
+    required double fps,
+    int? frameLimit,
+  }) async {
+    return VideoWizardMetadata.fromJson(
+      await _post('/projects/$projectId/datasets/video/metadata', {
+        'name': name,
+        'source_video': sourceVideo,
+        'scale': scale,
+        'fps': fps,
+        'frame_limit': frameLimit,
+        'output_format': 'png',
+        'downscale_method': 'bicubic',
+      }),
+    );
+  }
+
+  Future<UnsupportedState> resynthesizeDataset({
+    required String projectId,
+    required String datasetId,
+  }) async {
+    return UnsupportedState.fromJson(
+      await _post('/projects/$projectId/datasets/$datasetId/resynthesize', {}),
+    );
+  }
+
   Future<ProjectEnvelope> generateVideoDataset({
     required String projectId,
     required String name,
@@ -140,6 +215,25 @@ class BackendClient {
       'num_features': numFeatures,
       'num_blocks': numBlocks,
     });
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ModelTemplateCatalog> modelTemplates(String projectId) async {
+    return ModelTemplateCatalog.fromJson(
+      await _get('/projects/$projectId/model-templates'),
+    );
+  }
+
+  Future<ProjectEnvelope> saveTemplateAsModel({
+    required String projectId,
+    required String templateId,
+    required String name,
+    required int scale,
+  }) async {
+    final response = await _post(
+      '/projects/$projectId/model-templates/$templateId/save-as-model?name=${Uri.encodeQueryComponent(name)}&scale=$scale',
+      {},
+    );
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -258,6 +352,62 @@ class BackendClient {
     );
   }
 
+  Future<TrainingEstimate> trainingEstimate({
+    required String projectId,
+    required String name,
+    required String datasetId,
+    required String modelId,
+    String trainMode = 'new',
+    String device = 'cpu',
+    int epochs = 10,
+    int checkpointCadence = 1,
+    double validationPercentage = 0.1,
+    int validationSeed = 42,
+    bool validationShuffle = true,
+    bool tensorboard = false,
+    String precision = 'float32',
+    bool compile = false,
+    int warmupEpochs = 0,
+    String schedulerType = 'cosine',
+    String diffMode = 'absolute',
+  }) async {
+    return TrainingEstimate.fromJson(
+      await _post('/projects/$projectId/training/estimate', {
+        'name': name,
+        'dataset_id': datasetId,
+        'model_id': modelId,
+        'train_mode': trainMode,
+        'device': device,
+        'epochs': epochs,
+        'checkpoint_cadence': checkpointCadence,
+        'validation_percentage': validationPercentage,
+        'validation_seed': validationSeed,
+        'validation_shuffle': validationShuffle,
+        'tensorboard': tensorboard,
+        'precision': precision,
+        'compile': compile,
+        'warmup_epochs': warmupEpochs,
+        'scheduler_type': schedulerType,
+        'diff_mode': diffMode,
+      }),
+    );
+  }
+
+  Future<LiveRunDetail> liveRunDetail(String projectId) async {
+    return LiveRunDetail.fromJson(
+      await _get('/projects/$projectId/live/detail'),
+    );
+  }
+
+  Future<SnapshotResponse> snapshotCheckpoint({
+    required String projectId,
+    required String runId,
+  }) async {
+    return SnapshotResponse.fromJson(
+      await _post('/projects/$projectId/runs/$runId/snapshot', {}),
+    );
+  }
+
   Future<PreviewEnvelope> validationPreview({
     required String projectId,
     required String runId,
@@ -280,6 +430,12 @@ class BackendClient {
     );
   }
 
+  Future<CheckpointAggregate> checkpointAggregate(String projectId) async {
+    return CheckpointAggregate.fromJson(
+      await _get('/projects/$projectId/checkpoints/aggregate'),
+    );
+  }
+
   Future<CheckpointListEnvelope> deleteCheckpoint({
     required String projectId,
     required String runId,
@@ -287,13 +443,17 @@ class BackendClient {
   }) async {
     final request = await _httpClient.openUrl(
       'DELETE',
-      AppConfig.apiUri('/projects/$projectId/runs/$runId/checkpoints/$checkpointId'),
+      AppConfig.apiUri(
+        '/projects/$projectId/runs/$runId/checkpoints/$checkpointId',
+      ),
     );
     final token = _sessionToken;
     if (token != null) {
       request.headers.set('x-sr-tuner-token', token);
     }
-    return CheckpointListEnvelope.fromJson(await _readJson(await request.close()));
+    return CheckpointListEnvelope.fromJson(
+      await _readJson(await request.close()),
+    );
   }
 
   Future<JobState> exportCheckpointPth({
@@ -362,9 +522,17 @@ class BackendClient {
     return InferenceRecord.fromJson(response);
   }
 
-  Future<InferenceHistoryEnvelope> listInferenceHistory(String projectId) async {
+  Future<InferenceHistoryEnvelope> listInferenceHistory(
+    String projectId,
+  ) async {
     return InferenceHistoryEnvelope.fromJson(
       await _get('/projects/$projectId/inference'),
+    );
+  }
+
+  Future<InferenceInspector> inferenceInspector(String projectId) async {
+    return InferenceInspector.fromJson(
+      await _get('/projects/$projectId/inference/inspector'),
     );
   }
 
