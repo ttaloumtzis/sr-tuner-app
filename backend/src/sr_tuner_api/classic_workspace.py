@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -17,8 +18,8 @@ from .errors import ApiError
 from .ids import slugify
 from .inference import InferenceRecord, TileConfig, list_inference_history
 from .jobs import Job, utc_now_iso
-from .metrics import active_run_status, read_metrics
-from .models import CreateModelRequest, OptimizerConfig, SchedulerConfig, default_model_config
+from .metrics import active_run_status, get_live_status, read_metrics
+from .models import CreateModelRequest, ModelObject, OptimizerConfig, SchedulerConfig, default_model_config
 from .project_store import open_project, project_file, write_project
 from .runs import ACTIVE_RUN_STATES, RunObject, RunSetupRequest, available_devices, create_run
 from .schemas import ProjectState, WorkspaceState
@@ -509,8 +510,11 @@ def save_template_as_model(project_root: Path, template_id: str, name: str, scal
 def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingEstimateResponse:
     project = open_project(project_root)
     dataset = _find_dataset(project, request.dataset_id)
+    model = _find_model(project, request.model_id)
     pair_count = dataset.validation.pair_count
-    iterations = max(1, len(range(pair_count)))
+    validation_count = int(pair_count * request.validation_percentage) if request.validation_enabled else 0
+    train_count = max(1, pair_count - validation_count)
+    iterations = max(1, math.ceil(train_count / max(request.batch_size, 1)))
     low_pair = None
     if pair_count < 100:
         low_pair = _unsupported("low_pair_count", "Fewer than 100 usable pairs may not generalize; add data or explicitly confirm training.", reason="missing_prerequisite")
@@ -518,7 +522,7 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
         available=dataset.validation.usable,
         estimated_time_seconds=iterations * request.epochs,
         iterations_per_epoch=iterations,
-        vram_peak_bytes=None,
+        vram_peak_bytes=_estimate_vram_peak_bytes(model, request),
         disk_per_checkpoint_bytes=25_000_000,
         low_pair_guard=low_pair,
         unsupported_losses=[],
@@ -531,6 +535,23 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
     )
 
 
+def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:
+    crop = 64
+    scale = max(model.scale, 1)
+    features = max(model.num_features, 1)
+    blocks = max(model.num_blocks, 1)
+    batch = max(request.batch_size, 1)
+    bytes_per_value = 2 if request.precision == "mixed" else 4
+    lr_pixels = crop * crop
+    hr_pixels = (crop * scale) * (crop * scale)
+    activation_layers = blocks * 4 + 8
+    activation_values = batch * (features * lr_pixels * activation_layers + 6 * hr_pixels)
+    parameter_values = (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+    optimizer_multiplier = 3 if request.precision == "float32" else 2
+    safety_factor = 1.35 if request.device.startswith("cuda") or request.device.startswith("rocm") else 1.1
+    return int((activation_values * bytes_per_value + parameter_values * bytes_per_value * optimizer_multiplier) * safety_factor)
+
+
 def live_detail(project_root: Path) -> LiveRunDetailResponse:
     status = active_run_status(project_root)
     run = status.run
@@ -538,9 +559,10 @@ def live_detail(project_root: Path) -> LiveRunDetailResponse:
         return LiveRunDetailResponse(active=False, open_log=ActionState(id="open_log", label="Open log", supported=False, reason="No run is selected."))
     metrics = read_metrics(project_root, run.id, limit=20)
     latest = metrics.records[-1] if metrics.records else None
-    epoch_progress = 0.0
-    if latest and run.validation_indexes is not None:
-        epoch_progress = 0.0 if latest.iteration == 0 else min(1.0, latest.iteration / max(latest.iteration, 1))
+    live = get_live_status(project_root, run.id) if run.state in ACTIVE_RUN_STATES else None
+    epoch_progress = live.latest_metrics.get("epoch_progress", 0.0) if live else 0.0
+    if live is None and latest and run.validation_indexes is not None:
+        epoch_progress = 1.0 if latest.iteration > 0 else 0.0
     log_tail = _read_log_tail(project_root, run)
     oom = _oom_error(run)
     return LiveRunDetailResponse(
@@ -678,6 +700,13 @@ def _find_dataset(project: ProjectState, dataset_id: str) -> DatasetObject:
         if raw.get("id") == dataset_id:
             return DatasetObject.model_validate(raw)
     raise ApiError(404, "dataset_not_found", "Dataset was not found.", details={"dataset_id": dataset_id})
+
+
+def _find_model(project: ProjectState, model_id: str) -> ModelObject:
+    for raw in project.models:
+        if raw.get("id") == model_id:
+            return ModelObject.model_validate(raw)
+    raise ApiError(404, "model_not_found", "Model was not found.", details={"model_id": model_id})
 
 
 def _dataset_health_checks(dataset: DatasetObject) -> list[HealthCheckRow]:

@@ -248,7 +248,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Basics'), findsOneWidget);
-    expect(find.text('Schedule and validation'), findsOneWidget);
+    expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('Validation'), findsOneWidget);
     expect(find.text('Optimizer'), findsOneWidget);
     expect(find.text('Loss'), findsOneWidget);
     expect(find.text('Setup estimate and launch readiness'), findsOneWidget);
@@ -272,11 +273,19 @@ void main() {
 
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('Snapshot'), findsOneWidget);
-    expect(find.text('Epoch progress'), findsOneWidget);
+    expect(find.text('Epoch progress'), findsAtLeastNWidgets(1));
     expect(find.text('Run progress'), findsOneWidget);
-    expect(find.text('Loss / PSNR'), findsOneWidget);
+    expect(find.text('Metric charts'), findsOneWidget);
+    expect(find.text('Loss'), findsAtLeastNWidgets(1));
+    expect(find.text('PSNR'), findsAtLeastNWidgets(1));
+    expect(find.text('SSIM'), findsAtLeastNWidgets(1));
     expect(find.text('Validation samples'), findsOneWidget);
+    expect(find.text('Input pending'), findsOneWidget);
+    expect(find.text('Output pending'), findsOneWidget);
+    expect(find.text('Target pending'), findsOneWidget);
+    expect(find.text('Diff pending'), findsOneWidget);
     expect(find.text('Recent events'), findsOneWidget);
+    expect(client.lastPreviewIndex, 0);
   });
 
   testWidgets('training runs can be deleted from the run list', (tester) async {
@@ -362,6 +371,7 @@ class _FakeBackendClient extends BackendClient {
   int selectedTab = 0;
   int createdRuns = 0;
   int deletedRuns = 0;
+  int? lastPreviewIndex;
 
   @override
   Future<DashboardSummary> dashboardSummary(String projectId) async {
@@ -586,8 +596,11 @@ class _FakeBackendClient extends BackendClient {
     required String trainMode,
     required String device,
     required int epochs,
+    required int batchSize,
     required int checkpointCadence,
+    required bool validationEnabled,
     required double validationPercentage,
+    required int validationEveryEpochs,
     required int validationSeed,
     required bool validationShuffle,
     required bool tensorboard,
@@ -596,6 +609,9 @@ class _FakeBackendClient extends BackendClient {
     required int warmupEpochs,
     required String schedulerType,
     required String diffMode,
+    required double l1Weight,
+    required double perceptualWeight,
+    required double adversarialWeight,
   }) async {
     createdRuns += 1;
     return ProjectEnvelope(
@@ -636,8 +652,11 @@ class _FakeBackendClient extends BackendClient {
     String trainMode = 'new',
     String device = 'cpu',
     int epochs = 10,
+    int batchSize = 16,
     int checkpointCadence = 1,
+    bool validationEnabled = true,
     double validationPercentage = 0.1,
+    int validationEveryEpochs = 1,
     int validationSeed = 42,
     bool validationShuffle = true,
     bool tensorboard = false,
@@ -646,6 +665,9 @@ class _FakeBackendClient extends BackendClient {
     int warmupEpochs = 0,
     String schedulerType = 'cosine',
     String diffMode = 'absolute',
+    double l1Weight = 1.0,
+    double perceptualWeight = 0.0,
+    double adversarialWeight = 0.0,
   }) async {
     return TrainingEstimate(
       available: true,
@@ -706,19 +728,33 @@ class _FakeBackendClient extends BackendClient {
           kind: 'quality',
           unit: 'dB',
         ),
+        'val_ssim': MetricDefinition(
+          name: 'val_ssim',
+          label: 'SSIM',
+          kind: 'quality',
+          unit: null,
+        ),
       },
       records: [
         MetricRecord(
           step: 1,
           epoch: 1,
           iteration: 1,
-          values: const {'train_loss_total': 0.2, 'val_psnr': 27.0},
+          values: const {
+            'train_loss_total': 0.2,
+            'val_psnr': 27.0,
+            'val_ssim': 0.81,
+          },
         ),
         MetricRecord(
           step: 2,
           epoch: 2,
           iteration: 42,
-          values: const {'train_loss_total': 0.12, 'val_psnr': 28.4},
+          values: const {
+            'train_loss_total': 0.12,
+            'val_psnr': 28.4,
+            'val_ssim': 0.86,
+          },
         ),
       ],
     );
@@ -747,7 +783,9 @@ class _FakeBackendClient extends BackendClient {
   Future<PreviewEnvelope> validationPreview({
     required String projectId,
     required String runId,
+    int previewIndex = 0,
   }) async {
+    lastPreviewIndex = previewIndex;
     return PreviewEnvelope(
       runId: runId,
       generatedAt: 'now',
@@ -989,6 +1027,7 @@ RunSummary _run({bool active = false}) {
     trainMode: 'new',
     device: 'cpu',
     epochs: 10,
+    batchSize: 16,
     checkpointCadence: 1,
     logDir: '/tmp/demo/logs',
   );

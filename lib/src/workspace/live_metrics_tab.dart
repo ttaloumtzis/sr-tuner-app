@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app_config.dart';
@@ -49,7 +51,7 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
   void _startPolling() {
     _poller?.stop();
     _poller = BoundedPoller<_LiveSnapshot>(
-      interval: const Duration(seconds: 2),
+      interval: const Duration(seconds: 1),
       fetch: _fetchSnapshot,
       onData: (value) {
         if (mounted) {
@@ -74,15 +76,26 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
     if (run == null) {
       return _LiveSnapshot(status: status, detail: detail);
     }
-    final metrics = await widget.client.runMetrics(
-      projectId: widget.project.id,
-      runId: run.id,
-    );
     final telemetry = await widget.client.hardwareTelemetry(widget.project.id);
-    final preview = await widget.client.validationPreview(
-      projectId: widget.project.id,
-      runId: run.id,
-    );
+    final previous = _snapshot;
+    final previousRun = previous?.detail.run ?? previous?.status.run;
+    final shouldRefreshEpochData =
+        previous == null ||
+        previousRun?.id != run.id ||
+        previous.status.epoch != status.epoch;
+    final metrics = shouldRefreshEpochData
+        ? await widget.client.runMetrics(
+            projectId: widget.project.id,
+            runId: run.id,
+          )
+        : previous.metrics;
+    final preview = shouldRefreshEpochData
+        ? await widget.client.validationPreview(
+            projectId: widget.project.id,
+            runId: run.id,
+            previewIndex: 0,
+          )
+        : previous.preview;
     return _LiveSnapshot(
       status: status,
       detail: detail,
@@ -208,26 +221,41 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
                         flex: 3,
                         child: ListView(
                           children: [
-                            _MetricCards(snapshot: snapshot),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: _MetricCards(snapshot: snapshot),
+                                ),
+                                SizedBox(width: tokens.gap),
+                                SizedBox(
+                                  width: 410,
+                                  child: _HardwarePanel(
+                                    telemetry: snapshot.telemetry,
+                                  ),
+                                ),
+                              ],
+                            ),
                             SizedBox(height: tokens.gap),
                             SizedBox(
-                              height: 260,
+                              height: 455,
                               child: _MetricCharts(metrics: snapshot.metrics),
                             ),
                             SizedBox(height: tokens.gap),
-                            _EventsPanel(detail: snapshot.detail),
+                            SizedBox(
+                              height: 230,
+                              child: _EventsPanel(detail: snapshot.detail),
+                            ),
                           ],
                         ),
                       ),
                       SizedBox(width: tokens.gap),
                       SizedBox(
-                        width: 410,
+                        width: 520,
                         child: ListView(
                           children: [
-                            _HardwarePanel(telemetry: snapshot.telemetry),
-                            SizedBox(height: tokens.gap),
                             SizedBox(
-                              height: 360,
+                              height: 760,
                               child: _ValidationPanel(
                                 detail: snapshot.detail,
                                 preview: snapshot.preview,
@@ -365,28 +393,69 @@ class _MetricCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = snapshot.status.latestMetrics;
     final definitions = snapshot.metrics?.definitions ?? {};
-    final keys = [
-      'train_loss_total',
-      'val_psnr',
-      'val_ssim',
-      'learning_rate',
-      'iterations_per_second',
+    final telemetry = snapshot.telemetry;
+    final run = snapshot.detail.run ?? snapshot.status.run;
+    final cards = [
+      _MetricCardSpec(
+        label: definitions['train_loss_total']?.label ?? 'Train Loss',
+        value: _formatMetric(
+          metrics['train_loss_total'],
+          definitions['train_loss_total']?.unit,
+        ),
+      ),
+      _MetricCardSpec(
+        label: 'PSNR',
+        value: _formatMetric(
+          metrics['val_psnr'],
+          definitions['val_psnr']?.unit,
+        ),
+      ),
+      _MetricCardSpec(
+        label: definitions['learning_rate']?.label ?? 'Learning Rate',
+        value: _formatMetric(
+          metrics['learning_rate'],
+          definitions['learning_rate']?.unit,
+        ),
+      ),
+      _MetricCardSpec(
+        label: definitions['iterations_per_second']?.label ?? 'Speed',
+        value: _formatMetric(
+          metrics['iterations_per_second'],
+          definitions['iterations_per_second']?.unit,
+        ),
+      ),
+      _MetricCardSpec(
+        label: 'Iteration',
+        value: snapshot.status.iteration.toString(),
+      ),
+      _MetricCardSpec(
+        label: 'VRAM used',
+        value: _formatTelemetry(telemetry?.memoryUsed),
+      ),
+      _MetricCardSpec(
+        label: 'Batch size',
+        value: run?.batchSize.toString() ?? '--',
+      ),
     ];
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final key in keys)
+        for (final card in cards)
           SizedBox(
             width: 170,
-            child: SrMetricCard(
-              label: definitions[key]?.label ?? key,
-              value: _formatMetric(metrics[key], definitions[key]?.unit),
-            ),
+            child: SrMetricCard(label: card.label, value: card.value),
           ),
       ],
     );
   }
+}
+
+class _MetricCardSpec {
+  const _MetricCardSpec({required this.label, required this.value});
+
+  final String label;
+  final String value;
 }
 
 class _MetricCharts extends StatelessWidget {
@@ -399,19 +468,96 @@ class _MetricCharts extends StatelessWidget {
     final records = metrics?.records ?? const <MetricRecord>[];
     if (records.isEmpty) {
       return const SrSection(
-        title: 'Loss / PSNR',
+        title: 'Metric charts',
         child: Center(child: Text('No metric records yet.')),
       );
     }
+    final definitions = metrics?.definitions ?? {};
     return SrSection(
-      title: 'Loss / PSNR',
-      child: SizedBox(
-        height: 180,
-        child: CustomPaint(
-          painter: _LineChartPainter(records: records),
-          child: const SizedBox.expand(),
-        ),
+      title: 'Metric charts',
+      child: Column(
+        children: [
+          _SingleMetricChart(
+            records: records,
+            metricKey: 'train_loss_total',
+            title: definitions['train_loss_total']?.label ?? 'Loss',
+            yAxisLabel: 'Loss',
+            color: const Color(0xff58c48a),
+          ),
+          const SizedBox(height: 12),
+          _SingleMetricChart(
+            records: records,
+            metricKey: 'val_psnr',
+            title: definitions['val_psnr']?.label ?? 'PSNR',
+            yAxisLabel: 'PSNR',
+            color: const Color(0xff6aa6ff),
+          ),
+          const SizedBox(height: 12),
+          _SingleMetricChart(
+            records: records,
+            metricKey: 'val_ssim',
+            title: definitions['val_ssim']?.label ?? 'SSIM',
+            yAxisLabel: 'SSIM',
+            color: const Color(0xffffc857),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _SingleMetricChart extends StatelessWidget {
+  const _SingleMetricChart({
+    required this.records,
+    required this.metricKey,
+    required this.title,
+    required this.yAxisLabel,
+    required this.color,
+  });
+
+  final List<MetricRecord> records;
+  final String metricKey;
+  final String title;
+  final String yAxisLabel;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = [
+      for (final record in records)
+        if (record.values[metricKey] != null) record.values[metricKey]!,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(width: 10, height: 2, color: color),
+            const SizedBox(width: 6),
+            Text(title, style: Theme.of(context).textTheme.labelLarge),
+            const Spacer(),
+            Text(
+              values.isEmpty ? '--' : _formatMetric(values.last, null),
+              style: TextStyle(color: srTokens(context).muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 92,
+          child: CustomPaint(
+            painter: _MetricChartPainter(
+              records: records,
+              metricKey: metricKey,
+              yAxisLabel: yAxisLabel,
+              color: color,
+              textColor: srTokens(context).muted,
+              axisColor: srTokens(context).border,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -479,45 +625,75 @@ class _ValidationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = preview;
+    final assetsByKind = <String, PreviewAsset>{
+      for (final asset in value?.assets ?? const <PreviewAsset>[])
+        asset.kind: asset,
+    };
+    final diffAsset =
+        assetsByKind['diff_absolute'] ?? assetsByKind['diff_heatmap'];
+    final slots = [
+      _PreviewSlot(label: 'Input', asset: assetsByKind['lr']),
+      _PreviewSlot(label: 'Output', asset: assetsByKind['sr']),
+      _PreviewSlot(label: 'Target', asset: assetsByKind['hr']),
+      _PreviewSlot(label: 'Diff', asset: diffAsset),
+    ];
     return SrSection(
       title: 'Validation samples',
       subtitle: detail.validationSamples.isEmpty
-          ? 'Preview assets'
+          ? 'Waiting for first preview'
           : '${detail.validationSamples.length} samples',
-      child: value == null || value.assets.isEmpty
-          ? const SrImagePlaceholder(label: 'No validation preview yet')
-          : GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 1.25,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              children: [
-                for (final asset in value.assets)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          AppConfig.apiUri(asset.url).toString(),
-                          fit: BoxFit.cover,
-                        ),
-                        Align(
-                          alignment: Alignment.bottomLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            color: Colors.black54,
-                            child: Text(asset.kind),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+      child: SizedBox(
+        height: 650,
+        child: GridView.count(
+          crossAxisCount: 2,
+          childAspectRatio: 1.0,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [for (final slot in slots) _PreviewTile(slot: slot)],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewSlot {
+  const _PreviewSlot({required this.label, required this.asset});
+
+  final String label;
+  final PreviewAsset? asset;
+}
+
+class _PreviewTile extends StatelessWidget {
+  const _PreviewTile({required this.slot});
+
+  final _PreviewSlot slot;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = slot.asset;
+    if (asset == null) {
+      return SrImagePlaceholder(label: '${slot.label} pending');
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            AppConfig.apiUri(asset.url).toString(),
+            fit: BoxFit.cover,
+          ),
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              color: Colors.black54,
+              child: Text(slot.label),
             ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -539,9 +715,10 @@ class _EventsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final event in detail.recentEvents)
+          for (final event in detail.recentEvents.take(3))
             ListTile(
               dense: true,
+              visualDensity: VisualDensity.compact,
               leading: const Icon(Icons.bolt),
               title: Text(event.description),
               subtitle: Text(event.timestamp),
@@ -663,44 +840,100 @@ class _OomState extends StatelessWidget {
   }
 }
 
-class _LineChartPainter extends CustomPainter {
-  _LineChartPainter({required this.records});
+class _MetricChartPainter extends CustomPainter {
+  _MetricChartPainter({
+    required this.records,
+    required this.metricKey,
+    required this.yAxisLabel,
+    required this.color,
+    required this.textColor,
+    required this.axisColor,
+  });
 
   final List<MetricRecord> records;
+  final String metricKey;
+  final String yAxisLabel;
+  final Color color;
+  final Color textColor;
+  final Color axisColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final axisPaint = Paint()
-      ..color = Colors.white24
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(0, size.height),
-      Offset(size.width, size.height),
-      axisPaint,
-    );
-    canvas.drawLine(Offset(0, 0), Offset(0, size.height), axisPaint);
-    _drawSeries(canvas, size, 'train_loss_total', const Color(0xff58c48a));
-    _drawSeries(canvas, size, 'val_psnr', const Color(0xff6aa6ff));
-    _drawSeries(canvas, size, 'val_ssim', const Color(0xffffc857));
-  }
-
-  void _drawSeries(Canvas canvas, Size size, String key, Color color) {
-    final values = [
+    final points = [
       for (final record in records)
-        if (record.values[key] != null) record.values[key]!,
+        if (record.values[metricKey] != null)
+          _MetricPoint(record: record, value: record.values[metricKey]!),
     ];
-    if (values.length < 2) {
+    if (points.isEmpty) {
+      _drawText(
+        canvas,
+        'No data yet',
+        Offset(size.width / 2 - 34, size.height / 2),
+      );
       return;
     }
+    final plot = Rect.fromLTWH(
+      44,
+      8,
+      math.max(0, size.width - 56),
+      math.max(0, size.height - 40),
+    );
+    final axisPaint = Paint()
+      ..color = axisColor
+      ..strokeWidth = 1;
+    canvas.drawLine(plot.bottomLeft, plot.bottomRight, axisPaint);
+    canvas.drawLine(plot.bottomLeft, plot.topLeft, axisPaint);
+    _drawText(canvas, 'Epoch', Offset(plot.center.dx - 16, size.height - 14));
+    _drawText(canvas, yAxisLabel, Offset(0, plot.top + 2));
+
+    final values = [for (final point in points) point.value];
     final minValue = values.reduce((a, b) => a < b ? a : b);
     final maxValue = values.reduce((a, b) => a > b ? a : b);
     final span = (maxValue - minValue).abs() < 0.000001
         ? 1.0
         : maxValue - minValue;
+    for (var index = 0; index < 4; index++) {
+      final ratio = index / 3;
+      final y = plot.bottom - ratio * plot.height;
+      final value = minValue + ratio * span;
+      canvas.drawLine(
+        Offset(plot.left - 4, y),
+        Offset(plot.left, y),
+        axisPaint,
+      );
+      _drawText(canvas, _formatAxisValue(value), Offset(4, y - 7));
+    }
+    final xTickCount = math.min(points.length, 3);
+    for (var index = 0; index < xTickCount; index++) {
+      final sourceIndex = xTickCount == 1
+          ? 0
+          : ((points.length - 1) * index / (xTickCount - 1)).round();
+      final ratio = points.length == 1
+          ? 0.0
+          : sourceIndex / (points.length - 1);
+      final x = plot.left + ratio * plot.width;
+      canvas.drawLine(
+        Offset(x, plot.bottom),
+        Offset(x, plot.bottom + 4),
+        axisPaint,
+      );
+      _drawText(
+        canvas,
+        points[sourceIndex].record.epoch.toString(),
+        Offset(x - 4, plot.bottom + 7),
+      );
+    }
+    if (points.length < 2) {
+      final y =
+          plot.bottom - ((points.first.value - minValue) / span * plot.height);
+      canvas.drawCircle(Offset(plot.left, y), 3, Paint()..color = color);
+      return;
+    }
     final path = Path();
-    for (var index = 0; index < values.length; index++) {
-      final x = size.width * (index / (values.length - 1));
-      final y = size.height - ((values[index] - minValue) / span * size.height);
+    for (var index = 0; index < points.length; index++) {
+      final x = plot.left + plot.width * (index / (points.length - 1));
+      final y =
+          plot.bottom - ((points[index].value - minValue) / span * plot.height);
       if (index == 0) {
         path.moveTo(x, y);
       } else {
@@ -716,9 +949,39 @@ class _LineChartPainter extends CustomPainter {
     );
   }
 
+  void _drawText(Canvas canvas, String text, Offset offset) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: textColor, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, offset);
+  }
+
+  String _formatAxisValue(double value) {
+    if (value.abs() >= 100) {
+      return value.toStringAsFixed(0);
+    }
+    if (value.abs() >= 10) {
+      return value.toStringAsFixed(1);
+    }
+    return value.toStringAsPrecision(2);
+  }
+
   @override
-  bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
-      oldDelegate.records != records;
+  bool shouldRepaint(covariant _MetricChartPainter oldDelegate) =>
+      oldDelegate.records != records ||
+      oldDelegate.metricKey != metricKey ||
+      oldDelegate.color != color;
+}
+
+class _MetricPoint {
+  const _MetricPoint({required this.record, required this.value});
+
+  final MetricRecord record;
+  final double value;
 }
 
 class _LiveSnapshot {
@@ -745,4 +1008,11 @@ String _formatMetric(double? value, String? unit) {
       ? value.toStringAsFixed(1)
       : value.toStringAsPrecision(3);
   return unit == null ? formatted : '$formatted $unit';
+}
+
+String _formatTelemetry(TelemetryField? field) {
+  if (field == null || !field.available || field.value == null) {
+    return '--';
+  }
+  return '${field.value}${field.unit == null ? '' : ' ${field.unit}'}';
 }

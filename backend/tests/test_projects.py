@@ -692,13 +692,13 @@ def test_model_create_list_update_loss_validation_and_defaults(tmp_path, monkeyp
     assert updated.status_code == 200
     assert updated.json()["project"]["models"][0]["optimizer"]["lr"] == 0.0001
 
-    unsupported_loss = client.post(
+    weighted_loss = client.post(
         f"/projects/{project_id}/models",
         json={"name": "GAN x4", "scale": 4, "loss_weights": {"l1": 1, "perceptual": 1, "adversarial": 0}},
         headers=auth_headers(),
     )
-    assert unsupported_loss.status_code == 422
-    assert unsupported_loss.json()["error"]["code"] == "unsupported_loss"
+    assert weighted_loss.status_code == 200
+    assert weighted_loss.json()["project"]["models"][-1]["loss_weights"]["perceptual"] == 1
 
 
 def test_model_status_and_dataset_compatibility(tmp_path, monkeypatch) -> None:

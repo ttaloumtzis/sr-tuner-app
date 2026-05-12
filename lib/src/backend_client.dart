@@ -312,8 +312,11 @@ class BackendClient {
     required String trainMode,
     required String device,
     required int epochs,
+    required int batchSize,
     required int checkpointCadence,
+    required bool validationEnabled,
     required double validationPercentage,
+    required int validationEveryEpochs,
     required int validationSeed,
     required bool validationShuffle,
     required bool tensorboard,
@@ -322,6 +325,9 @@ class BackendClient {
     required int warmupEpochs,
     required String schedulerType,
     required String diffMode,
+    required double l1Weight,
+    required double perceptualWeight,
+    required double adversarialWeight,
   }) async {
     final response = await _post('/projects/$projectId/runs', {
       'name': name,
@@ -330,8 +336,11 @@ class BackendClient {
       'train_mode': trainMode,
       'device': device,
       'epochs': epochs,
+      'batch_size': batchSize,
       'checkpoint_cadence': checkpointCadence,
+      'validation_enabled': validationEnabled,
       'validation_percentage': validationPercentage,
+      'validation_every_epochs': validationEveryEpochs,
       'validation_seed': validationSeed,
       'validation_shuffle': validationShuffle,
       'tensorboard': tensorboard,
@@ -340,6 +349,11 @@ class BackendClient {
       'warmup_epochs': warmupEpochs,
       'scheduler_type': schedulerType,
       'diff_mode': diffMode,
+      'loss_weights': {
+        'l1': l1Weight,
+        'perceptual': perceptualWeight,
+        'adversarial': adversarialWeight,
+      },
     });
     return ProjectEnvelope.fromJson(response);
   }
@@ -408,8 +422,11 @@ class BackendClient {
     String trainMode = 'new',
     String device = 'cpu',
     int epochs = 10,
+    int batchSize = 16,
     int checkpointCadence = 1,
+    bool validationEnabled = true,
     double validationPercentage = 0.1,
+    int validationEveryEpochs = 1,
     int validationSeed = 42,
     bool validationShuffle = true,
     bool tensorboard = false,
@@ -418,6 +435,9 @@ class BackendClient {
     int warmupEpochs = 0,
     String schedulerType = 'cosine',
     String diffMode = 'absolute',
+    double l1Weight = 1.0,
+    double perceptualWeight = 0.0,
+    double adversarialWeight = 0.0,
   }) async {
     return TrainingEstimate.fromJson(
       await _post('/projects/$projectId/training/estimate', {
@@ -427,8 +447,11 @@ class BackendClient {
         'train_mode': trainMode,
         'device': device,
         'epochs': epochs,
+        'batch_size': batchSize,
         'checkpoint_cadence': checkpointCadence,
+        'validation_enabled': validationEnabled,
         'validation_percentage': validationPercentage,
+        'validation_every_epochs': validationEveryEpochs,
         'validation_seed': validationSeed,
         'validation_shuffle': validationShuffle,
         'tensorboard': tensorboard,
@@ -437,6 +460,11 @@ class BackendClient {
         'warmup_epochs': warmupEpochs,
         'scheduler_type': schedulerType,
         'diff_mode': diffMode,
+        'loss_weights': {
+          'l1': l1Weight,
+          'perceptual': perceptualWeight,
+          'adversarial': adversarialWeight,
+        },
       }),
     );
   }
@@ -459,9 +487,12 @@ class BackendClient {
   Future<PreviewEnvelope> validationPreview({
     required String projectId,
     required String runId,
+    int previewIndex = 0,
   }) async {
     return PreviewEnvelope.fromJson(
-      await _get('/projects/$projectId/runs/$runId/preview'),
+      await _get(
+        '/projects/$projectId/runs/$runId/preview?preview_index=$previewIndex',
+      ),
     );
   }
 

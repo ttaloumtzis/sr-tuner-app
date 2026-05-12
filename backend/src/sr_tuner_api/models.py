@@ -169,12 +169,12 @@ def _validate_model_config(scale: int, losses: LossWeights) -> None:
             "The internal residual pixel-shuffle model does not support the selected scale.",
             details={"scale": scale, "supported_scales": sorted(SUPPORTED_INTERNAL_SCALES)},
         )
-    if losses.perceptual > 0 or losses.adversarial > 0:
+    if losses.l1 <= 0 and losses.perceptual <= 0 and losses.adversarial <= 0:
         raise ApiError(
             422,
-            "unsupported_loss",
-            "The current internal training path only supports L1 loss.",
-            details={"perceptual": losses.perceptual, "adversarial": losses.adversarial},
+            "loss_weights_required",
+            "At least one loss weight must be greater than zero.",
+            details={"l1": losses.l1, "perceptual": losses.perceptual, "adversarial": losses.adversarial},
         )
 
 

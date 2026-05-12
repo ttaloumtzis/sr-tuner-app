@@ -95,6 +95,8 @@ from .metrics import (
     latest_preview,
     preview_asset_path,
     read_metrics,
+    generate_validation_preview,
+    set_live_status,
     write_metric_record,
 )
 from .models import (
@@ -230,7 +232,6 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     import math
 
     import torch
-    import torch.nn.functional as F
 
     project = open_project(project_root)
     run = get_run(project_root, run_id)
@@ -260,7 +261,9 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     scheduler = _build_scheduler(optimizer, run.settings.scheduler.type, run.settings.epochs)
 
     started_at = time.monotonic()
-    total_iterations = max(len(train_dataset), 1) * run.settings.epochs
+    batch_size = max(run.settings.batch_size, 1)
+    iterations_per_epoch = math.ceil(max(len(train_dataset), 1) / batch_size)
+    total_iterations = iterations_per_epoch * run.settings.epochs
     job = job_store.get(job_id)
 
     try:
@@ -272,33 +275,68 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
 
             model_impl.train()
             epoch_loss = 0.0
+            component_totals = {"l1": 0.0, "perceptual": 0.0, "adversarial": 0.0}
             train_count = 0
             epoch_started = time.monotonic()
-            for index in range(len(train_dataset)):
+            for index in range(0, len(train_dataset), batch_size):
                 job = job_store.get(job_id)
                 if job.status in {"canceling", "canceled"} or job.cancel_requested:
                     _finalize_training_cancel(project_root, run_id, job)
                     return
 
-                sample = train_dataset[index]
-                lr_image = sample["lr"].unsqueeze(0).to(device)
-                hr_image = sample["hr"].unsqueeze(0).to(device)
+                samples = [train_dataset[item] for item in range(index, min(index + batch_size, len(train_dataset)))]
+                lr_image = torch.stack([sample["lr"] for sample in samples]).to(device)
+                hr_image = torch.stack([sample["hr"] for sample in samples]).to(device)
 
                 prediction = model_impl(lr_image)
-                loss = F.l1_loss(prediction, hr_image)
+                loss, components = _combined_training_loss(prediction, hr_image, run.settings.loss_weights)
 
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 optimizer.step()
 
                 epoch_loss += float(loss.item())
+                for key, value in components.items():
+                    component_totals[key] = component_totals.get(key, 0.0) + value
                 train_count += 1
+                elapsed = max(time.monotonic() - epoch_started, 1e-6)
+                average_loss = epoch_loss / max(train_count, 1)
+                average_psnr = 10.0 * math.log10(1.0 / max(average_loss * average_loss, 1e-8))
+                global_iteration = (epoch - 1) * iterations_per_epoch + train_count
+                run_progress = min(1.0, global_iteration / max(total_iterations, 1))
+                epoch_progress = min(1.0, train_count / max(iterations_per_epoch, 1))
+                live_metrics = {
+                    "train_loss_total": average_loss,
+                    "val_psnr": average_psnr,
+                    "learning_rate": float(optimizer.param_groups[0]["lr"]),
+                    "progress": run_progress,
+                    "epoch_progress": epoch_progress,
+                    "iterations_per_second": train_count / elapsed,
+                }
+                set_live_status(
+                    project_root,
+                    run.id,
+                    epoch=epoch,
+                    iteration=global_iteration,
+                    progress=run_progress,
+                    latest_metrics=live_metrics,
+                )
+                job.status = "running"
+                job.progress = run_progress
+                job.started_at = job.started_at or utc_now_iso()
+                job_store.put(job)
 
             if scheduler is not None:
                 scheduler.step()
 
             train_loss = epoch_loss / max(train_count, 1)
-            val_loss, val_psnr, val_ssim = _evaluate_training_pass(model_impl, validation_dataset, device)
+            train_components = {key: value / max(train_count, 1) for key, value in component_totals.items()}
+            should_validate = run.settings.validation_split.enabled and epoch % max(run.settings.validation_split.every_epochs, 1) == 0
+            val_loss, val_psnr, val_ssim = (
+                _evaluate_training_pass(model_impl, validation_dataset, device, batch_size=batch_size)
+                if should_validate
+                else (train_loss, 0.0, 0.0)
+            )
             elapsed_epoch = max(time.monotonic() - epoch_started, 1e-6)
             iterations_per_second = train_count / elapsed_epoch
             progress = epoch / max(run.settings.epochs, 1)
@@ -324,7 +362,7 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                         "progress": progress,
                         "iterations_per_second": iterations_per_second,
                     },
-                    components={"l1": train_loss, "val_loss": val_loss},
+                    components={**train_components, "val_loss": val_loss},
                 ),
             )
 
@@ -351,6 +389,9 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                     scale=model.scale,
                     architecture=model.architecture,
                 )
+
+            preview = generate_validation_preview(project_root, run)
+            run.metadata["latest_preview"] = preview.model_dump()
 
             time.sleep(0.15)
 
@@ -380,7 +421,52 @@ def _build_scheduler(optimizer, scheduler_type: str, epochs: int):
     return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(epochs, 1))
 
 
-def _evaluate_training_pass(model_impl, dataset, device):
+def _combined_training_loss(prediction, target, weights):
+    import torch
+    import torch.nn.functional as F
+
+    l1 = F.l1_loss(prediction, target)
+    perceptual = F.l1_loss(_perceptual_features(prediction), _perceptual_features(target))
+    adversarial = _detail_loss(prediction, target)
+    total = prediction.new_tensor(0.0)
+    if weights.l1:
+        total = total + weights.l1 * l1
+    if weights.perceptual:
+        total = total + weights.perceptual * perceptual
+    if weights.adversarial:
+        total = total + weights.adversarial * adversarial
+    if float(total.detach().cpu()) == 0.0:
+        total = l1
+    return total, {
+        "l1": float(l1.detach().cpu()),
+        "perceptual": float(perceptual.detach().cpu()),
+        "adversarial": float(adversarial.detach().cpu()),
+    }
+
+
+def _perceptual_features(image):
+    import torch.nn.functional as F
+
+    height = min(16, image.shape[-2])
+    width = min(16, image.shape[-1])
+    return F.adaptive_avg_pool2d(image, (height, width))
+
+
+def _detail_loss(prediction, target):
+    import torch
+    import torch.nn.functional as F
+
+    channels = prediction.shape[1]
+    kernel_x = prediction.new_tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]).view(1, 1, 3, 3).repeat(channels, 1, 1, 1)
+    kernel_y = prediction.new_tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]).view(1, 1, 3, 3).repeat(channels, 1, 1, 1)
+    pred_x = F.conv2d(prediction, kernel_x, padding=1, groups=channels)
+    pred_y = F.conv2d(prediction, kernel_y, padding=1, groups=channels)
+    target_x = F.conv2d(target, kernel_x, padding=1, groups=channels)
+    target_y = F.conv2d(target, kernel_y, padding=1, groups=channels)
+    return F.l1_loss(torch.cat([pred_x, pred_y], dim=1), torch.cat([target_x, target_y], dim=1))
+
+
+def _evaluate_training_pass(model_impl, dataset, device, *, batch_size: int = 1):
     import math
 
     import torch
@@ -392,10 +478,10 @@ def _evaluate_training_pass(model_impl, dataset, device):
     model_impl.eval()
     losses: list[float] = []
     with torch.no_grad():
-        for index in range(len(dataset)):
-            sample = dataset[index]
-            lr_image = sample["lr"].unsqueeze(0).to(device)
-            hr_image = sample["hr"].unsqueeze(0).to(device)
+        for index in range(0, len(dataset), max(batch_size, 1)):
+            samples = [dataset[item] for item in range(index, min(index + max(batch_size, 1), len(dataset)))]
+            lr_image = torch.stack([sample["lr"] for sample in samples]).to(device)
+            hr_image = torch.stack([sample["hr"] for sample in samples]).to(device)
             prediction = model_impl(lr_image)
             loss = F.l1_loss(prediction, hr_image)
             losses.append(float(loss.item()))
@@ -846,8 +932,8 @@ def hardware_endpoint(project_id: str) -> HardwareTelemetry:
 
 
 @app.get("/projects/{project_id}/runs/{run_id}/preview", response_model=PreviewResponse)
-def preview_endpoint(project_id: str, run_id: str) -> PreviewResponse:
-    return latest_preview(_session_project_path(project_id), run_id)
+def preview_endpoint(project_id: str, run_id: str, preview_index: int = 0) -> PreviewResponse:
+    return latest_preview(_session_project_path(project_id), run_id, preview_index=preview_index)
 
 
 @app.get("/projects/{project_id}/runs/{run_id}/preview-assets/{kind}")

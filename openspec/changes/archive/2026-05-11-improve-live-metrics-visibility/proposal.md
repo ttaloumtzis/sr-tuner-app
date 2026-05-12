@@ -7,6 +7,11 @@ The Live Metrics tab in sr-tuner has usability issues that make it difficult to 
 
 ## What Changes
 
+### Design Handoff Gap Capture
+- `design_handoff_sr_tuner/` remains the broader Classic Workspace reference, but this change intentionally scopes to the Live Metrics visibility gaps that block readable training feedback.
+- The handoff's Live artboard shows a two-chart layout (Loss train/val + PSNR) with the metric cards below the charts. This change keeps the already-approved OpenSpec direction of **3 separate stacked charts** for Loss, PSNR, and SSIM because the current problem is mixed-axis readability.
+- A future 1:1 handoff pass should revisit full Live tab composition, metric card ordering, LPIPS/best-metric summaries, and exact right-rail event placement.
+
 ### UI Improvements
 - Split the single combined metric chart into **3 separate stacked charts** (Loss, PSNR, SSIM)
 - Add **axis numbers and labels** to all charts (x-axis: epoch/step, y-axis: metric value)
@@ -30,4 +35,4 @@ The Live Metrics tab in sr-tuner has usability issues that make it difficult to 
 
 - **Frontend**: `lib/src/workspace/live_metrics_tab.dart` - major refactor of `_LineChartPainter` and `_ValidationPanel`
 - **Models**: `lib/src/project_models.dart` - may need new preview data structure for 4-way grid
-- **Backend dependency**: Requires backend iteration-level metrics (separate workstream)
+- **Backend**: add `preview_index=0` support on run preview requests; iteration-level metrics remain a dependency for true within-epoch updates

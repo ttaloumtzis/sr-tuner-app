@@ -28,10 +28,14 @@ class TrainingTab extends StatefulWidget {
 class _TrainingTabState extends State<TrainingTab> {
   final _name = TextEditingController(text: 'run_x4');
   final _epochs = TextEditingController(text: '10');
+  final _batchSize = TextEditingController(text: '16');
   final _checkpointCadence = TextEditingController(text: '1');
-  final _validation = TextEditingController(text: '0.1');
+  final _validationEvery = TextEditingController(text: '1');
   final _seed = TextEditingController(text: '42');
   final _warmup = TextEditingController(text: '0');
+  final _l1Weight = TextEditingController(text: '1.0');
+  final _perceptualWeight = TextEditingController(text: '0.0');
+  final _adversarialWeight = TextEditingController(text: '0.0');
   TrainingReadiness? _readiness;
   TrainingEstimate? _estimate;
   List<DeviceOption> _devices = [
@@ -44,6 +48,8 @@ class _TrainingTabState extends State<TrainingTab> {
   String _precision = 'float32';
   String _scheduler = 'cosine';
   String _diffMode = 'absolute';
+  bool _validationEnabled = true;
+  double _validationPercentage = 0.1;
   bool _validationShuffle = true;
   bool _tensorboard = false;
   bool _compile = false;
@@ -58,10 +64,14 @@ class _TrainingTabState extends State<TrainingTab> {
     for (final controller in [
       _name,
       _epochs,
+      _batchSize,
       _checkpointCadence,
-      _validation,
+      _validationEvery,
       _seed,
       _warmup,
+      _l1Weight,
+      _perceptualWeight,
+      _adversarialWeight,
     ]) {
       controller.addListener(_loadEstimate);
     }
@@ -82,10 +92,14 @@ class _TrainingTabState extends State<TrainingTab> {
   void dispose() {
     _name.dispose();
     _epochs.dispose();
+    _batchSize.dispose();
     _checkpointCadence.dispose();
-    _validation.dispose();
+    _validationEvery.dispose();
     _seed.dispose();
     _warmup.dispose();
+    _l1Weight.dispose();
+    _perceptualWeight.dispose();
+    _adversarialWeight.dispose();
     super.dispose();
   }
 
@@ -110,10 +124,12 @@ class _TrainingTabState extends State<TrainingTab> {
           if (!_devices.any((device) => device.id == _device)) {
             _device = _devices.first.id;
           } else if (!_deviceTouched && _device == 'cpu') {
-            _device = _devices
-                .where((device) => device.id != 'cpu' && device.available)
-                .firstOrNull
-                ?.id ?? _device;
+            _device =
+                _devices
+                    .where((device) => device.id != 'cpu' && device.available)
+                    .firstOrNull
+                    ?.id ??
+                _device;
           }
         });
       }
@@ -139,8 +155,11 @@ class _TrainingTabState extends State<TrainingTab> {
         trainMode: _trainMode,
         device: _device,
         epochs: int.tryParse(_epochs.text.trim()) ?? 10,
+        batchSize: int.tryParse(_batchSize.text.trim()) ?? 16,
         checkpointCadence: int.tryParse(_checkpointCadence.text.trim()) ?? 1,
-        validationPercentage: double.tryParse(_validation.text.trim()) ?? 0.1,
+        validationEnabled: _validationEnabled,
+        validationPercentage: _validationPercentage,
+        validationEveryEpochs: int.tryParse(_validationEvery.text.trim()) ?? 1,
         validationSeed: int.tryParse(_seed.text.trim()) ?? 42,
         validationShuffle: _validationShuffle,
         tensorboard: _tensorboard,
@@ -149,6 +168,10 @@ class _TrainingTabState extends State<TrainingTab> {
         warmupEpochs: int.tryParse(_warmup.text.trim()) ?? 0,
         schedulerType: _scheduler,
         diffMode: _diffMode,
+        l1Weight: double.tryParse(_l1Weight.text.trim()) ?? 1.0,
+        perceptualWeight: double.tryParse(_perceptualWeight.text.trim()) ?? 0.0,
+        adversarialWeight:
+            double.tryParse(_adversarialWeight.text.trim()) ?? 0.0,
       );
       if (mounted) {
         setState(() => _estimate = estimate);
@@ -195,8 +218,11 @@ class _TrainingTabState extends State<TrainingTab> {
         trainMode: _trainMode,
         device: _device,
         epochs: int.tryParse(_epochs.text.trim()) ?? 10,
+        batchSize: int.tryParse(_batchSize.text.trim()) ?? 16,
         checkpointCadence: int.tryParse(_checkpointCadence.text.trim()) ?? 1,
-        validationPercentage: double.tryParse(_validation.text.trim()) ?? 0.1,
+        validationEnabled: _validationEnabled,
+        validationPercentage: _validationPercentage,
+        validationEveryEpochs: int.tryParse(_validationEvery.text.trim()) ?? 1,
         validationSeed: int.tryParse(_seed.text.trim()) ?? 42,
         validationShuffle: _validationShuffle,
         tensorboard: _tensorboard,
@@ -205,6 +231,10 @@ class _TrainingTabState extends State<TrainingTab> {
         warmupEpochs: int.tryParse(_warmup.text.trim()) ?? 0,
         schedulerType: _scheduler,
         diffMode: _diffMode,
+        l1Weight: double.tryParse(_l1Weight.text.trim()) ?? 1.0,
+        perceptualWeight: double.tryParse(_perceptualWeight.text.trim()) ?? 0.0,
+        adversarialWeight:
+            double.tryParse(_adversarialWeight.text.trim()) ?? 0.0,
       );
       widget.onProjectChanged(envelope.project);
     } catch (error) {
@@ -374,11 +404,25 @@ class _TrainingTabState extends State<TrainingTab> {
                       SizedBox(height: tokens.gap),
                       _ScheduleSection(
                         epochs: _epochs,
+                        batchSize: _batchSize,
                         checkpointCadence: _checkpointCadence,
-                        validation: _validation,
+                      ),
+                      SizedBox(height: tokens.gap),
+                      _ValidationSection(
+                        enabled: _validationEnabled,
+                        percentage: _validationPercentage,
+                        every: _validationEvery,
                         seed: _seed,
                         validationShuffle: _validationShuffle,
                         busy: _busy,
+                        onEnabled: (value) {
+                          setState(() => _validationEnabled = value);
+                          _loadEstimate();
+                        },
+                        onPercentage: (value) {
+                          setState(() => _validationPercentage = value);
+                          _loadEstimate();
+                        },
                         onShuffle: (value) {
                           setState(() => _validationShuffle = value);
                           _loadEstimate();
@@ -427,6 +471,9 @@ class _TrainingTabState extends State<TrainingTab> {
                       SizedBox(height: tokens.gap),
                       _LossSection(
                         diffMode: _diffMode,
+                        l1Weight: _l1Weight,
+                        perceptualWeight: _perceptualWeight,
+                        adversarialWeight: _adversarialWeight,
                         estimate: _estimate,
                         busy: _busy,
                         onDiffMode: (value) {
@@ -561,41 +608,93 @@ class _BasicsSection extends StatelessWidget {
 class _ScheduleSection extends StatelessWidget {
   const _ScheduleSection({
     required this.epochs,
+    required this.batchSize,
     required this.checkpointCadence,
-    required this.validation,
-    required this.seed,
-    required this.validationShuffle,
-    required this.busy,
-    required this.onShuffle,
   });
 
   final TextEditingController epochs;
+  final TextEditingController batchSize;
   final TextEditingController checkpointCadence;
-  final TextEditingController validation;
-  final TextEditingController seed;
-  final bool validationShuffle;
-  final bool busy;
-  final ValueChanged<bool> onShuffle;
 
   @override
   Widget build(BuildContext context) {
     return SrSection(
-      title: 'Schedule and validation',
+      title: 'Schedule',
       child: Column(
         children: [
           Row(
             children: [
               Expanded(child: _numberField(epochs, 'Epochs')),
               const SizedBox(width: 8),
-              Expanded(
-                child: _numberField(checkpointCadence, 'Checkpoint every'),
-              ),
+              Expanded(child: _numberField(batchSize, 'Batch size')),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _numberField(validation, 'Validation split')),
+              Expanded(
+                child: _numberField(checkpointCadence, 'Checkpoint every'),
+              ),
+              const Spacer(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ValidationSection extends StatelessWidget {
+  const _ValidationSection({
+    required this.enabled,
+    required this.percentage,
+    required this.every,
+    required this.seed,
+    required this.validationShuffle,
+    required this.busy,
+    required this.onEnabled,
+    required this.onPercentage,
+    required this.onShuffle,
+  });
+
+  final bool enabled;
+  final double percentage;
+  final TextEditingController every;
+  final TextEditingController seed;
+  final bool validationShuffle;
+  final bool busy;
+  final ValueChanged<bool> onEnabled;
+  final ValueChanged<double> onPercentage;
+  final ValueChanged<bool> onShuffle;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = percentage * 100;
+    return SrSection(
+      title: 'Validation',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Enable validation during training'),
+            value: enabled,
+            onChanged: busy ? null : onEnabled,
+          ),
+          Text(
+            'Validation split: ${percent.toStringAsFixed(percent < 1 ? 1 : 0)}%',
+          ),
+          Slider(
+            min: 0.001,
+            max: 0.20,
+            divisions: 199,
+            value: percentage.clamp(0.001, 0.20),
+            label: '${percent.toStringAsFixed(percent < 1 ? 1 : 0)}%',
+            onChanged: busy || !enabled ? null : onPercentage,
+          ),
+          Row(
+            children: [
+              Expanded(child: _numberField(every, 'Validate every N epochs')),
               const SizedBox(width: 8),
               Expanded(child: _numberField(seed, 'Seed')),
             ],
@@ -604,7 +703,7 @@ class _ScheduleSection extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             title: const Text('Shuffle validation split'),
             value: validationShuffle,
-            onChanged: busy ? null : onShuffle,
+            onChanged: busy || !enabled ? null : onShuffle,
           ),
         ],
       ),
@@ -713,12 +812,18 @@ class _OptimizerSection extends StatelessWidget {
 class _LossSection extends StatelessWidget {
   const _LossSection({
     required this.diffMode,
+    required this.l1Weight,
+    required this.perceptualWeight,
+    required this.adversarialWeight,
     required this.estimate,
     required this.busy,
     required this.onDiffMode,
   });
 
   final String diffMode;
+  final TextEditingController l1Weight;
+  final TextEditingController perceptualWeight;
+  final TextEditingController adversarialWeight;
   final TrainingEstimate? estimate;
   final bool busy;
   final ValueChanged<String> onDiffMode;
@@ -741,7 +846,21 @@ class _LossSection extends StatelessWidget {
             onChanged: busy ? null : (value) => onDiffMode(value ?? 'absolute'),
           ),
           const SizedBox(height: 12),
-          const _LossRow(label: 'L1 pixel loss', supported: true),
+          _LossWeightRow(
+            label: 'L1 pixel loss',
+            description: 'Pixel reconstruction weight',
+            controller: l1Weight,
+          ),
+          _LossWeightRow(
+            label: 'Perceptual loss',
+            description: 'Low-frequency feature similarity',
+            controller: perceptualWeight,
+          ),
+          _LossWeightRow(
+            label: 'Adversarial/detail loss',
+            description: 'Edge/detail realism proxy',
+            controller: adversarialWeight,
+          ),
         ],
       ),
     );
@@ -786,7 +905,7 @@ class _EstimateSection extends StatelessWidget {
                 value: value?.iterationsPerEpoch?.toString() ?? '--',
               ),
               SrMetricCard(
-                label: 'VRAM peak',
+                label: 'Max VRAM',
                 value: _formatBytes(value?.vramPeakBytes),
               ),
               SrMetricCard(
@@ -916,22 +1035,47 @@ class _DependencyRow extends StatelessWidget {
   }
 }
 
-class _LossRow extends StatelessWidget {
-  const _LossRow({required this.label, required this.supported});
+class _LossWeightRow extends StatelessWidget {
+  const _LossWeightRow({
+    required this.label,
+    required this.description,
+    required this.controller,
+  });
 
   final String label;
-  final bool supported;
+  final String description;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      enabled: supported,
-      leading: Icon(
-        supported ? Icons.check_circle_outline : Icons.lock_outline,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label),
+                Text(
+                  description,
+                  style: TextStyle(color: srTokens(context).muted),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 92,
+            child: TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Weight'),
+              keyboardType: TextInputType.number,
+            ),
+          ),
+        ],
       ),
-      title: Text(label),
-      trailing: Text(supported ? 'Supported' : 'Unavailable'),
     );
   }
 }
@@ -1003,7 +1147,7 @@ class _RunList extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${_nameFor(datasets, run.datasetId)} · ${_nameFor(models, run.modelId)} · ${run.device} · ${run.epochs} epochs',
+                      '${_nameFor(datasets, run.datasetId)} · ${_nameFor(models, run.modelId)} · ${run.device} · ${run.epochs} epochs · batch ${run.batchSize}',
                       style: TextStyle(color: srTokens(context).muted),
                     ),
                     const SizedBox(height: 10),
@@ -1043,7 +1187,9 @@ class _RunList extends StatelessWidget {
                           icon: const Icon(Icons.delete_outline),
                           label: const Text('Delete config'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Theme.of(context).colorScheme.error,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
                           ),
                         ),
                         OutlinedButton.icon(

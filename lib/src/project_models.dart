@@ -258,6 +258,7 @@ class RunSummary {
     required this.trainMode,
     required this.device,
     required this.epochs,
+    required this.batchSize,
     required this.checkpointCadence,
     required this.logDir,
   });
@@ -270,6 +271,7 @@ class RunSummary {
   final String trainMode;
   final String device;
   final int epochs;
+  final int batchSize;
   final int checkpointCadence;
   final String? logDir;
 
@@ -293,6 +295,7 @@ class RunSummary {
       trainMode: json['train_mode'] as String? ?? 'new',
       device: settings['device'] as String? ?? 'cpu',
       epochs: settings['epochs'] as int? ?? 10,
+      batchSize: settings['batch_size'] as int? ?? 16,
       checkpointCadence: settings['checkpoint_cadence'] as int? ?? 1,
       logDir: json['log_dir'] as String?,
     );

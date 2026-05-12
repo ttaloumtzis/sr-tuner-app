@@ -12,7 +12,7 @@ from .datasets import DatasetObject, SUPPORTED_IMAGE_EXTENSIONS
 from .errors import ApiError
 from .ids import new_id
 from .jobs import Job, JobError, utc_now_iso
-from .models import ModelObject
+from .models import LossWeights, ModelObject
 from .project_store import open_project, store_asset_path, write_project
 from .schemas import ProjectState
 
@@ -40,7 +40,9 @@ TERMINAL_RUN_STATES = {"stopped", "completed", "failed", "interrupted"}
 
 
 class ValidationSplitConfig(BaseModel):
+    enabled: bool = True
     percentage: float = Field(default=0.1, ge=0, lt=1)
+    every_epochs: int = Field(default=1, ge=1)
     seed: int = 42
     shuffle: bool = True
 
@@ -60,6 +62,7 @@ class RunSettings(BaseModel):
     train_mode: TrainMode = "new"
     device: str = "cpu"
     epochs: int = Field(default=10, ge=1)
+    batch_size: int = Field(default=16, ge=1)
     checkpoint_cadence: int = Field(default=1, ge=1)
     validation_split: ValidationSplitConfig = Field(default_factory=ValidationSplitConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -67,6 +70,7 @@ class RunSettings(BaseModel):
     compile: bool = False
     scheduler: SchedulerOptions = Field(default_factory=SchedulerOptions)
     diff_mode: DiffMode = "absolute"
+    loss_weights: LossWeights = Field(default_factory=LossWeights)
 
 
 class RunLineage(BaseModel):
@@ -104,8 +108,11 @@ class RunSetupRequest(BaseModel):
     train_mode: TrainMode = "new"
     device: str = "cpu"
     epochs: int = Field(default=10, ge=1)
+    batch_size: int = Field(default=16, ge=1)
     checkpoint_cadence: int = Field(default=1, ge=1)
+    validation_enabled: bool = True
     validation_percentage: float = Field(default=0.1, ge=0, lt=1)
+    validation_every_epochs: int = Field(default=1, ge=1)
     validation_seed: int = 42
     validation_shuffle: bool = True
     tensorboard: bool = False
@@ -116,6 +123,7 @@ class RunSetupRequest(BaseModel):
     scheduler_decay_epochs: list[int] = Field(default_factory=list)
     scheduler_decay_factor: float = Field(default=0.5, gt=0, le=1)
     diff_mode: DiffMode = "absolute"
+    loss_weights: LossWeights = Field(default_factory=LossWeights)
     source_checkpoint_id: str | None = None
     source_checkpoint_path: str | None = None
 
@@ -207,7 +215,7 @@ def create_run(project_root: Path, request: RunSetupRequest) -> tuple[ProjectSta
 
     train_indexes, validation_indexes = split_indexes(
         pair_count=dataset.validation.pair_count,
-        validation_percentage=request.validation_percentage,
+        validation_percentage=request.validation_percentage if request.validation_enabled else 0.0,
         seed=request.validation_seed,
         shuffle=request.validation_shuffle,
     )
@@ -223,9 +231,12 @@ def create_run(project_root: Path, request: RunSetupRequest) -> tuple[ProjectSta
             train_mode=request.train_mode,
             device=request.device,
             epochs=request.epochs,
+            batch_size=request.batch_size,
             checkpoint_cadence=request.checkpoint_cadence,
             validation_split=ValidationSplitConfig(
-                percentage=request.validation_percentage,
+                enabled=request.validation_enabled,
+                percentage=request.validation_percentage if request.validation_enabled else 0.0,
+                every_epochs=request.validation_every_epochs,
                 seed=request.validation_seed,
                 shuffle=request.validation_shuffle,
             ),
@@ -239,6 +250,7 @@ def create_run(project_root: Path, request: RunSetupRequest) -> tuple[ProjectSta
                 decay_factor=request.scheduler_decay_factor,
             ),
             diff_mode=request.diff_mode,
+            loss_weights=request.loss_weights,
         ),
         train_indexes=train_indexes,
         validation_indexes=validation_indexes,
@@ -554,9 +566,9 @@ def _validate_run_setup(project: ProjectState, dataset: DatasetObject, model: Mo
             "Dataset scale does not match model scale.",
             details={"dataset_scale": dataset_scale, "model_scale": model.scale},
         )
-    losses = model.loss_weights
-    if losses.perceptual > 0 or losses.adversarial > 0:
-        raise ApiError(422, "unsupported_loss", "The internal training path only supports L1 loss.")
+    losses = request.loss_weights
+    if losses.l1 <= 0 and losses.perceptual <= 0 and losses.adversarial <= 0:
+        raise ApiError(422, "loss_weights_required", "At least one training loss weight must be greater than zero.")
     if request.tensorboard and not training_readiness(include_tensorboard=True).available:
         readiness = training_readiness(include_tensorboard=True)
         missing = [item.model_dump() for item in readiness.dependencies if item.required and not item.available]

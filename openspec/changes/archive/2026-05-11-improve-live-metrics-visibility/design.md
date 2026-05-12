@@ -31,10 +31,23 @@ Current layout:
 - First epoch image shown quickly (poll for it specifically)
 
 **Non-Goals:**
-- Backend iteration-level metrics (separate workstream)
+- Full 1:1 Live artboard port from `design_handoff_sr_tuner/` (separate UI composition pass)
 - Changing the polling interval
 - Adding new metric types
 - Modifying the metric card display
+
+## Design Handoff Gap Analysis
+
+The handoff Live artboard is still the broader target for the Classic Workspace. This change closes the highest-impact visibility gaps while avoiding a full layout rewrite.
+
+| Handoff Area | Current Gap | This Change |
+|---|---|---|
+| Chart readability | Loss, PSNR, and SSIM share one custom painter and one visual area | Split into 3 single-metric charts with independent scaling |
+| Axis semantics | Existing painter draws axis lines only | Add x/y tick numbers and axis labels |
+| Validation preview | Existing grid renders arbitrary returned assets | Render deterministic Input, Output, Target, Diff slots |
+| Loading feedback | Empty preview can look like missing UI | Show placeholder slots immediately while waiting |
+| First preview sample | Run preview request has no explicit index | Add `preview_index=0` to frontend/backend contract |
+| Full handoff fidelity | Handoff places charts above metric cards and uses right-rail events | Deferred to a future 1:1 Live layout pass |
 
 ## Decisions
 
@@ -75,15 +88,15 @@ Current layout:
 ### 5. First Image of Epoch
 - **Decision**: Request only index 0 from the backend `validationPreview` endpoint
 - **Implementation**: Pass `preview_index=0` explicitly in the API call
-- **Rationale**: Backend already supports this via query param, just need to use it
+- **Rationale**: The dataset preview endpoint already uses this query pattern; the run preview endpoint needs matching support for API consistency
 
 ## Risks / Trade-offs
 
-- **[Risk]**: Backend may not have iteration-level metrics → **Mitigation**: UI will show "--" for live metrics until epoch ends, but charts and preview will work
+- **[Risk]**: Backend may not have iteration-level metrics → **Mitigation**: UI will show the latest available epoch/iteration values until the backend emits per-iteration records
 - **[Risk]**: Preview images may not arrive quickly → **Mitigation**: Show skeleton immediately, update when data arrives
 - **[Risk]**: Diff calculation may not be available → **Mitigation**: Show placeholder if diff not in assets
 
 ## Open Questions
 
-- Should we create a separate endpoint call specifically for "first epoch preview" to get it faster?
-- How should we handle the diff calculation - backend provides it or we compute in Flutter?
+- Should a future handoff-fidelity change move Recent Events into the Live right rail and reorder metric cards below charts?
+- Should LPIPS/best-metric cards be added as a separate metric capability?

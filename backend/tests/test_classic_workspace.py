@@ -80,6 +80,7 @@ def _add_dataset_model_run(project_id: str, project_root: Path, tmp_path: Path) 
             "train_mode": "new",
             "device": "cpu",
             "epochs": 2,
+            "batch_size": 16,
             "checkpoint_cadence": 1,
             "validation_percentage": 0.0,
             "validation_seed": 42,
@@ -221,6 +222,8 @@ def test_backend_domain_view_endpoints_return_supported_or_unavailable_states(tm
     assert estimate.status_code == 200
     assert estimate.json()["low_pair_guard"]["code"] == "low_pair_count"
     assert estimate.json()["unsupported_losses"] == []
+    assert estimate.json()["iterations_per_epoch"] >= 1
+    assert estimate.json()["vram_peak_bytes"] > 0
 
     live = client.get(f"/projects/{project_id}/live/detail")
     assert live.status_code == 200

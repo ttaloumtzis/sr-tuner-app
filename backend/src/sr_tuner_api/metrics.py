@@ -58,6 +58,13 @@ class ActiveRunStatus(BaseModel):
     latest_metrics: dict[str, float] = Field(default_factory=dict)
 
 
+class LiveStatusSnapshot(BaseModel):
+    epoch: int
+    iteration: int
+    progress: float
+    latest_metrics: dict[str, float] = Field(default_factory=dict)
+
+
 class TelemetryField(BaseModel):
     available: TelemetryAvailability
     value: float | str | None = None
@@ -141,6 +148,33 @@ DEFAULT_METRIC_DEFINITIONS: dict[str, MetricDefinition] = {
     ),
 }
 
+_LIVE_STATUS: dict[str, LiveStatusSnapshot] = {}
+
+
+def _live_status_key(project_root: Path, run_id: str) -> str:
+    return f"{project_root.resolve()}::{run_id}"
+
+
+def set_live_status(
+    project_root: Path,
+    run_id: str,
+    *,
+    epoch: int,
+    iteration: int,
+    progress: float,
+    latest_metrics: dict[str, float],
+) -> None:
+    _LIVE_STATUS[_live_status_key(project_root, run_id)] = LiveStatusSnapshot(
+        epoch=epoch,
+        iteration=iteration,
+        progress=progress,
+        latest_metrics=latest_metrics,
+    )
+
+
+def get_live_status(project_root: Path, run_id: str) -> LiveStatusSnapshot | None:
+    return _LIVE_STATUS.get(_live_status_key(project_root, run_id))
+
 
 def initialize_run_metrics(project_root: Path, run: RunObject) -> RunObject:
     run_dir = _run_dir(project_root, run)
@@ -207,14 +241,15 @@ def active_run_status(project_root: Path) -> ActiveRunStatus:
         return ActiveRunStatus()
     metrics = read_metrics(project_root, run.id, limit=1)
     latest = metrics.records[-1] if metrics.records else None
+    live = get_live_status(project_root, run.id) if run.state in ACTIVE_RUN_STATES else None
     return ActiveRunStatus(
         run=run,
         model=next((item for item in project.models if item.get("id") == run.model_id), None),
         dataset=next((item for item in project.datasets if item.get("id") == run.dataset_id), None),
-        epoch=latest.epoch if latest else 0,
-        iteration=latest.iteration if latest else 0,
-        progress=latest.values.get("progress", 0.0) if latest else 0.0,
-        latest_metrics=latest.values if latest else {},
+        epoch=live.epoch if live else (latest.epoch if latest else 0),
+        iteration=live.iteration if live else (latest.iteration if latest else 0),
+        progress=live.progress if live else (latest.values.get("progress", 0.0) if latest else 0.0),
+        latest_metrics=live.latest_metrics if live else (latest.values if latest else {}),
     )
 
 
@@ -222,13 +257,19 @@ def hardware_telemetry(run: RunObject | None = None) -> HardwareTelemetry:
     device = run.settings.device if run is not None else "cpu"
     device_type = device.split(":", maxsplit=1)[0]
     latest_speed = _latest_speed(run) if run is not None else None
+    memory_used = _unavailable("Runtime memory telemetry is not available for this device.")
+    memory_total = _unavailable("Runtime memory telemetry is not available for this device.")
+    utilization = _unavailable("Utilization telemetry is not available for this device.")
+    temperature = _unavailable("Temperature telemetry is not available for this device.")
+    if device.startswith("cuda"):
+        memory_used, memory_total, utilization, temperature = _cuda_telemetry(device)
     return HardwareTelemetry(
         device=device,
         device_type=device_type,
-        memory_used=_unavailable("Runtime memory telemetry is not available for this device."),
-        memory_total=_unavailable("Runtime memory telemetry is not available for this device."),
-        utilization=_unavailable("Utilization telemetry is not available for this device."),
-        temperature=_unavailable("Temperature telemetry is not available for this device."),
+        memory_used=memory_used,
+        memory_total=memory_total,
+        utilization=utilization,
+        temperature=temperature,
         iteration_speed=TelemetryField(
             available="available" if latest_speed is not None else "unavailable",
             value=latest_speed,
@@ -240,7 +281,34 @@ def hardware_telemetry(run: RunObject | None = None) -> HardwareTelemetry:
 
 def hardware_telemetry_for_project(project_root: Path) -> HardwareTelemetry:
     status = active_run_status(project_root)
-    return hardware_telemetry(status.run)
+    telemetry = hardware_telemetry(status.run)
+    if status.latest_metrics.get("iterations_per_second") is not None:
+        telemetry.iteration_speed = TelemetryField(
+            available="available",
+            value=status.latest_metrics["iterations_per_second"],
+            unit="it/s",
+        )
+    return telemetry
+
+
+def _cuda_telemetry(device: str) -> tuple[TelemetryField, TelemetryField, TelemetryField, TelemetryField]:
+    try:
+        import torch
+
+        index = int(device.split(":", maxsplit=1)[1]) if ":" in device else 0
+        if not torch.cuda.is_available() or index >= torch.cuda.device_count():
+            unavailable = _unavailable("CUDA/ROCm device is not available to PyTorch.")
+            return unavailable, unavailable, unavailable, unavailable
+        free_bytes, total_bytes = torch.cuda.mem_get_info(index)
+        used_bytes = total_bytes - free_bytes
+        memory_used = TelemetryField(available="available", value=round(used_bytes / (1024**3), 2), unit="GB")
+        memory_total = TelemetryField(available="available", value=round(total_bytes / (1024**3), 2), unit="GB")
+        utilization = _unavailable("Device utilization requires vendor monitoring tools.")
+        temperature = _unavailable("Device temperature requires vendor monitoring tools.")
+        return memory_used, memory_total, utilization, temperature
+    except Exception as exc:
+        unavailable = _unavailable(f"GPU telemetry query failed: {exc}")
+        return unavailable, unavailable, unavailable, unavailable
 
 
 def generate_validation_preview(project_root: Path, run: RunObject) -> PreviewResponse:
@@ -271,7 +339,7 @@ def generate_validation_preview(project_root: Path, run: RunObject) -> PreviewRe
     return PreviewResponse(run_id=run.id, generated_at=utc_now_iso(), diff_mode=run.settings.diff_mode, assets=assets)
 
 
-def latest_preview(project_root: Path, run_id: str) -> PreviewResponse:
+def latest_preview(project_root: Path, run_id: str, preview_index: int = 0) -> PreviewResponse:
     run = get_run(project_root, run_id)
     metadata = run.metadata.get("latest_preview")
     if metadata is not None:
