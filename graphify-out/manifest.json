@@ -1,0 +1,422 @@
+{
+  "/home/theodoros/Documents/sr-tuner/lib/main.dart": {
+    "mtime": 1778491291.7850099,
+    "hash": "c70c136c7849fb21879892d1552177fc"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/app_config.dart": {
+    "mtime": 1778574408.0791821,
+    "hash": "943610184ac3eb3b3ce1c2f4e5e50f7a"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/backend_process.dart": {
+    "mtime": 1778580179.9278398,
+    "hash": "8d3b4ae08441c919c82a7faa48ed8b8c"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace_store.dart": {
+    "mtime": 1778489076.2783628,
+    "hash": "fd40c65bcc0b3242a826a1093db67b7c"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/app.dart": {
+    "mtime": 1778517839.696964,
+    "hash": "6045f7d507e0d1a41c01537350b9657c"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/project_controller.dart": {
+    "mtime": 1778580032.8726192,
+    "hash": "7069b47d322728d83af14d2e9c244454"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/path_picker.dart": {
+    "mtime": 1778491202.452609,
+    "hash": "9c9326e0b5abe7ddc1b7791d92cae466"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/shared_widgets.dart": {
+    "mtime": 1778491303.7080636,
+    "hash": "aee43708bdf3f2a8589d55e0e7611f76"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/polling.dart": {
+    "mtime": 1778491279.8689563,
+    "hash": "7a4b181531e43267c6ecd1f5c21e099c"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/project_models.dart": {
+    "mtime": 1778517075.2227337,
+    "hash": "105c0bf2e53f187c129e371b987b16d0"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/backend_client.dart": {
+    "mtime": 1778580006.2626045,
+    "hash": "4b6d3c095bbedfae862a4acc1994da8b"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/classic_theme.dart": {
+    "mtime": 1778518059.2656384,
+    "hash": "7ce724aaa3d9148088e9d9e88d5dd31d"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/classic_components.dart": {
+    "mtime": 1778518072.336716,
+    "hash": "51676552a48a9882af92c232ba3dd827"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/startup_screen.dart": {
+    "mtime": 1778577531.693507,
+    "hash": "e6713b2b1b1cbf37053ee97c09e80fb8"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/checkpoints_tab.dart": {
+    "mtime": 1778519641.838644,
+    "hash": "2b34e84ff4a15b56c6be9d23cec01812"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/project_workspace.dart": {
+    "mtime": 1778518059.2826397,
+    "hash": "1f5ea4482aa8de6fb6d629084dd9543f"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/inference_tab.dart": {
+    "mtime": 1778520556.6899788,
+    "hash": "e1bdfcbba605f0a8fe023f4866280471"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/overview_tab.dart": {
+    "mtime": 1778518059.2796395,
+    "hash": "54f0ee6963ed252dddc7596645152136"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/dataset_tab.dart": {
+    "mtime": 1778578602.779248,
+    "hash": "d608ecab0170528589b44259c220209e"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/model_tab.dart": {
+    "mtime": 1778519055.3674014,
+    "hash": "6e91446f3c44514fd0ae241d4ad9584c"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/training_tab.dart": {
+    "mtime": 1778579063.9459102,
+    "hash": "074ce676b1c0c35b78d835a6214cddf4"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/workspace/live_metrics_tab.dart": {
+    "mtime": 1778519229.744266,
+    "hash": "d0b2b728b373bc72c4a082081ed46d8d"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/design_system/sr_chip.dart": {
+    "mtime": 1778519592.1852627,
+    "hash": "5bbe3e2bced5f509c1d4971118e608f5"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/design_system/sr_button.dart": {
+    "mtime": 1778519593.3962486,
+    "hash": "402b16b086c1c80fa95a18c51678eb69"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/design_system/sr_progress_bar.dart": {
+    "mtime": 1778519594.6770334,
+    "hash": "7297996a4e16e8b94d515ed39f3180cb"
+  },
+  "/home/theodoros/Documents/sr-tuner/lib/src/design_system/sr_chart.dart": {
+    "mtime": 1778519595.788291,
+    "hash": "40855e125e2b35495cf60bf20b2c47d5"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/generated_plugin_registrant.h": {
+    "mtime": 1778488693.725983,
+    "hash": "d295462c9da9f7fef22dc86c34492318"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1778491125.7134116,
+    "hash": "399ad1d69aa4ba27ae90eb088bbc155c"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/runner/main.cc": {
+    "mtime": 1778488688.3087368,
+    "hash": "0643b8609698e96b3abd63c210361a87"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/runner/my_application.cc": {
+    "mtime": 1778488688.3097112,
+    "hash": "c94334337fe3fff3a2232678e7f04b25"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/runner/my_application.h": {
+    "mtime": 1778488688.3099427,
+    "hash": "326a85d68857137fdfe8698a0c071baf"
+  },
+  "/home/theodoros/Documents/sr-tuner/test/widget_test.dart": {
+    "mtime": 1778489076.2793627,
+    "hash": "eed51b6377d33f92bda415bb31892b6b"
+  },
+  "/home/theodoros/Documents/sr-tuner/test/project_models_test.dart": {
+    "mtime": 1778574421.50413,
+    "hash": "a47ebbfefc60fa2f3cb919764ef7ac42"
+  },
+  "/home/theodoros/Documents/sr-tuner/test/classic_workspace_ui_test.dart": {
+    "mtime": 1778578866.7036748,
+    "hash": "3aa26496b72a7d64e5e509eff3a3044a"
+  },
+  "/home/theodoros/Documents/sr-tuner/scripts/gen_fixtures.py": {
+    "mtime": 1778496198.6032047,
+    "hash": "04ff9393bc202800f9936c7b99fbc826"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/__init__.py": {
+    "mtime": 1778488763.6046355,
+    "hash": "8caee58791303323218763dc5e709897"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/config.py": {
+    "mtime": 1778488763.6966336,
+    "hash": "a5ed9a75fe13873dc5d49fd7fb8f8dda"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/schemas.py": {
+    "mtime": 1778516773.0438063,
+    "hash": "83f06a2fdb5a9abec3f41d90fb549a01"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/project_store.py": {
+    "mtime": 1778491528.6140845,
+    "hash": "5d6f90c31b0a451938bf58708983e7a5"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/errors.py": {
+    "mtime": 1778490924.049384,
+    "hash": "a169eb72d0b276963183e1bd9c8f8650"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/ids.py": {
+    "mtime": 1778490924.1463845,
+    "hash": "0baf683d84196d94c461805cecc09121"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/security.py": {
+    "mtime": 1778490924.2439764,
+    "hash": "03963726b984a159facc08fe8d848a96"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/jobs.py": {
+    "mtime": 1778491835.9184964,
+    "hash": "717bfad6b23b299fe4fe0b8d002df2dc"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/image_probe.py": {
+    "mtime": 1778491836.0134966,
+    "hash": "3fdea7f69ac22a8242638d05bffbe35b"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/datasets.py": {
+    "mtime": 1778578047.949521,
+    "hash": "a6a79a12888a1986f57f9454c0564f9a"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/models.py": {
+    "mtime": 1778491836.2064977,
+    "hash": "fec7e8b40629dcaf2989b0a162a44805"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/metrics.py": {
+    "mtime": 1778493800.5484931,
+    "hash": "d59ebf1cb034df520763e05dd3a0bac4"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/main.py": {
+    "mtime": 1778583886.1035895,
+    "hash": "45f7453f4c73120255d7f3f58e499a78"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/runs.py": {
+    "mtime": 1778578789.084565,
+    "hash": "82429d001ecf3ed6daf298f4bd8eab2d"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/inference.py": {
+    "mtime": 1778496315.8307955,
+    "hash": "cde97aa1253b82310f5bfa949ac7e474"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/checkpoints.py": {
+    "mtime": 1778496318.8867848,
+    "hash": "6118c1906985d9096ec54ec8090c039b"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/classic_workspace.py": {
+    "mtime": 1778578821.3256118,
+    "hash": "6e52a0bf9635a85807afbb1609801c48"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/test_projects.py": {
+    "mtime": 1778580057.4636326,
+    "hash": "ead1fe64467766db07e82f55f88c258c"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/test_checkpoints.py": {
+    "mtime": 1778495124.1751552,
+    "hash": "980fa5d61a4c57a176dd77f8828b30b9"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/test_inference.py": {
+    "mtime": 1778495809.837579,
+    "hash": "faf7472334fef9f14433f364be4ccd9b"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/conftest.py": {
+    "mtime": 1778496192.1492274,
+    "hash": "2a140725f9bc377635fe4972ac0d8c60"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/test_smoke.py": {
+    "mtime": 1778496421.6804276,
+    "hash": "eb5d4d0b016c3a6dd1ba890cc5b4b63c"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/test_classic_workspace.py": {
+    "mtime": 1778579465.696263,
+    "hash": "012b64043848bbea97d1e84455833946"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/design-canvas.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "b63c9bdd64698d913160c1149317c269"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/tweaks-panel.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "0b67b9bfbe4e2860262209d25beb3067"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/wf-b-rest.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "323f36c43e68176f3b2a88f23bc0365a"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/wf-b-shell.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "45fb5cef1c55fef0338345fdd096c471"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/wf-b-train.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "60042ad1de740d65471fdd7e4cde9d8a"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/wf-common.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "bbfbe6ed03d8bcfcf47e5f30501e55b1"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/wf-start.jsx": {
+    "mtime": 1778490778.0,
+    "hash": "a9566807d99d10d931f6aa61d604b613"
+  },
+  "/home/theodoros/Documents/sr-tuner/analysis_options.yaml": {
+    "mtime": 1778488688.3032324,
+    "hash": "66d03d7647c8e438164feaf5b922d44a"
+  },
+  "/home/theodoros/Documents/sr-tuner/pubspec.yaml": {
+    "mtime": 1778491123.2292564,
+    "hash": "040b1823ee12e12b2e233af9ae671365"
+  },
+  "/home/theodoros/Documents/sr-tuner/README.md": {
+    "mtime": 1778579354.935178,
+    "hash": "ec398d4bf06bcc3231ca589f9de98d93"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/config.yaml": {
+    "mtime": 1778482997.2418385,
+    "hash": "9e3e7672b387a282583011181ab35f9a"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/desktop-project-workflow/spec.md": {
+    "mtime": 1778515023.6099672,
+    "hash": "b987743060f32246176f8020ee1ce1a4"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/dataset-management/spec.md": {
+    "mtime": 1778515023.514969,
+    "hash": "119b9cd04bd6325c33b0b2aca39d2aa6"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/model-management/spec.md": {
+    "mtime": 1778515023.8919616,
+    "hash": "b3f5bc912541afe655cf729edab4528f"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/training-runs/spec.md": {
+    "mtime": 1778515023.9859598,
+    "hash": "92a36676d5e883952a69d7e4d55bab83"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/live-metrics/spec.md": {
+    "mtime": 1778515023.7979636,
+    "hash": "9ec255e34129b23401281cae634ea89f"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/checkpoint-management/spec.md": {
+    "mtime": 1778515023.4219708,
+    "hash": "a0eed16531884256cbaa3d669e8ca52e"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/specs/inference-workflow/spec.md": {
+    "mtime": 1778515023.7039654,
+    "hash": "40145d62efa8d9a203a75125a088b553"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/proposal.md": {
+    "mtime": 1778487828.732828,
+    "hash": "029eac434f6f95eed99e3e456b7df306"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/design.md": {
+    "mtime": 1778490521.3427205,
+    "hash": "70c811bc6e9323142c7eed1eff9606a0"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md": {
+    "mtime": 1778496705.947521,
+    "hash": "36f4205f33e233d64d16dbc1e2162a03"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md": {
+    "mtime": 1778490490.665602,
+    "hash": "aa7af5bd323419397381297d762acb53"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/dataset-management/spec.md": {
+    "mtime": 1778490021.366051,
+    "hash": "69dca232126af0a033a3e04f30de8ea8"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/model-management/spec.md": {
+    "mtime": 1778490021.4631174,
+    "hash": "46e783274e42b0939716a030b822cf9c"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md": {
+    "mtime": 1778490490.7626023,
+    "hash": "a8975bb270e47feffc99a140e3112c58"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md": {
+    "mtime": 1778490065.261168,
+    "hash": "52be254ec3161069945ac5837e67f1d2"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/checkpoint-management/spec.md": {
+    "mtime": 1778490490.8596027,
+    "hash": "f62fa16fc69972cf6d1e111785497f46"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md": {
+    "mtime": 1778490065.4561684,
+    "hash": "eab30d1fd6cc880e7f100b0f8498558b"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/proposal.md": {
+    "mtime": 1778515268.6870055,
+    "hash": "a924b46f67cd1c9908f433094e52022d"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/design.md": {
+    "mtime": 1778516403.7535675,
+    "hash": "385795f286d9bdd5b21fc2361dcde13b"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/tasks.md": {
+    "mtime": 1778520924.801432,
+    "hash": "1faf61d61aac720b44695dbfb9a5fbcd"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/classic-workspace-ui/spec.md": {
+    "mtime": 1778515986.2948542,
+    "hash": "f8bc9e32829f70ef33a4aecc1a9827f5"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/project-dashboard-state/spec.md": {
+    "mtime": 1778515985.6498609,
+    "hash": "20a5104f63de5674df23c9b336f3f5f0"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/desktop-project-workflow/spec.md": {
+    "mtime": 1778516422.425377,
+    "hash": "c46995d34387996d05fde2ab2fe86115"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/dataset-management/spec.md": {
+    "mtime": 1778516403.8495665,
+    "hash": "b76d9e97d5644b6aa023af245693083c"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/model-management/spec.md": {
+    "mtime": 1778515985.837859,
+    "hash": "49712ffa578eef1af51c233c06af7187"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/training-runs/spec.md": {
+    "mtime": 1778516403.9415655,
+    "hash": "4741ba79c54ed25fbdce451c67c00ca5"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/live-metrics/spec.md": {
+    "mtime": 1778516404.0345645,
+    "hash": "ca7633c8b42980a9780cc4bd45377104"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/checkpoint-management/spec.md": {
+    "mtime": 1778516404.1285636,
+    "hash": "ab73c4d203a57c306077b9444ff55b61"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/inference-workflow/spec.md": {
+    "mtime": 1778515986.2058551,
+    "hash": "d7a836a3785b5b658cedd65781d496e3"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/CMakeLists.txt": {
+    "mtime": 1778488688.307508,
+    "hash": "f85addfcb06176dabea598810a43dbeb"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/CMakeLists.txt": {
+    "mtime": 1778488688.3083553,
+    "hash": "46690fb8ffaf7d227d8bc4713f31140d"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/runner/CMakeLists.txt": {
+    "mtime": 1778488688.3085601,
+    "hash": "6d75431dc21756981b53a7494c836311"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/README.md": {
+    "mtime": 1778490778.0,
+    "hash": "9db25325db091b92852cb715034b6746"
+  },
+  "/home/theodoros/Documents/sr-tuner/design_handoff_sr_tuner/Wireframes.html": {
+    "mtime": 1778490778.0,
+    "hash": "94cbaa9776ac39d7bf6035f6d8c3de72"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/fixtures/paired_4x/HR/frame_001.png": {
+    "mtime": 1778496184.8092809,
+    "hash": "dc7a37b1463b5fab1eea23ae8084a263"
+  },
+  "/home/theodoros/Documents/sr-tuner/backend/tests/fixtures/paired_4x/LR/frame_001.png": {
+    "mtime": 1778496184.8093674,
+    "hash": "95af6e4940a621d89222bc936bfde4b5"
+  }
+}

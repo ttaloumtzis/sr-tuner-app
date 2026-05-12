@@ -267,7 +267,16 @@ class _SrProgressBarState extends State<SrProgressBar>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat();
+    );
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(SrProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.kind != widget.kind) {
+      _syncAnimation();
+    }
   }
 
   @override
@@ -276,24 +285,37 @@ class _SrProgressBarState extends State<SrProgressBar>
     super.dispose();
   }
 
+  void _syncAnimation() {
+    if (widget.kind == SrProgressKind.solid) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    return SizedBox(
-      height: 8,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return CustomPaint(
-            painter: _ProgressPainter(
-              value: widget.value?.clamp(0, 1),
-              kind: widget.kind,
-              phase: _controller.value,
-              background: tokens.border.withValues(alpha: 0.45),
-              foreground: tokens.accent,
-            ),
-          );
-        },
+    return ExcludeSemantics(
+      child: RepaintBoundary(
+        child: SizedBox(
+          height: 8,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              return CustomPaint(
+                painter: _ProgressPainter(
+                  value: widget.value?.clamp(0, 1),
+                  kind: widget.kind,
+                  phase: _controller.value,
+                  background: tokens.border.withValues(alpha: 0.45),
+                  foreground: tokens.accent,
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

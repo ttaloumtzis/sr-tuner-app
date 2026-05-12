@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -264,7 +264,13 @@ def video_readiness() -> ReadinessResponse:
     )
 
 
-def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -> tuple[ProjectState, DatasetObject, Job]:
+def generate_video_dataset(
+    project_root: Path,
+    request: VideoGenerationConfig,
+    *,
+    job: Job | None = None,
+    on_job: Callable[[Job], None] | None = None,
+) -> tuple[ProjectState, DatasetObject, Job]:
     source = Path(request.source_video).expanduser().resolve()
     if not source.is_file():
         raise ApiError(404, "video_missing", "Source video was not found.", details={"path": str(source)})
@@ -277,11 +283,22 @@ def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -
         raise ApiError(409, "dataset_destination_exists", "Dataset destination already exists.", details={"path": str(target)})
     (target / "HR").mkdir(parents=True)
     (target / "LR").mkdir(parents=True)
+    total_seconds = _video_progress_seconds(source, request)
+    active_job = job or Job(
+        type="video_dataset_generation",
+        project_id=open_project(project_root).id,
+        status="running",
+        progress=0.02,
+        started_at=utc_now_iso(),
+        logs=[f"Generating dataset {request.name} from {source}."],
+    )
+    _publish_job(active_job, on_job)
     hr_cmd = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostats",
         "-i",
         str(source),
         "-vf",
@@ -289,15 +306,25 @@ def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -
     ]
     if request.frame_limit is not None:
         hr_cmd.extend(["-frames:v", str(request.frame_limit)])
+    hr_cmd.extend(["-progress", "pipe:1"])
     hr_cmd.append(str(target / "HR" / f"frame_%06d.{request.output_format}"))
-    completed = subprocess.run(hr_cmd, check=False, capture_output=True, text=True)
-    if completed.returncode != 0:
+    active_job.logs = [*active_job.logs[-49:], "Extracting HR frames."]
+    _publish_job(active_job, on_job)
+    hr_code, hr_stderr = _run_ffmpeg_progress(
+        hr_cmd,
+        total_seconds=total_seconds,
+        job=active_job,
+        on_job=on_job,
+        start=0.05,
+        end=0.45,
+    )
+    if hr_code != 0:
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
             500,
             "video_extraction_failed",
             "ffmpeg failed to extract video frames.",
-            details={"stderr": completed.stderr[-2000:]},
+            details={"stderr": hr_stderr[-2000:]},
         )
     lr_filters = [
         f"fps={request.fps}",
@@ -312,6 +339,7 @@ def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostats",
         "-i",
         str(source),
         "-vf",
@@ -322,16 +350,29 @@ def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -
     if request.output_format == "jpg":
         ffmpeg_quality = max(2, min(31, round((100 - request.jpeg_quality) / 3.2) + 2))
         lr_cmd.extend(["-q:v", str(ffmpeg_quality)])
+    lr_cmd.extend(["-progress", "pipe:1"])
     lr_cmd.append(str(target / "LR" / f"frame_%06d.{request.output_format}"))
-    completed = subprocess.run(lr_cmd, check=False, capture_output=True, text=True)
-    if completed.returncode != 0:
+    active_job.logs = [*active_job.logs[-49:], "Generating LR frames."]
+    _publish_job(active_job, on_job)
+    lr_code, lr_stderr = _run_ffmpeg_progress(
+        lr_cmd,
+        total_seconds=total_seconds,
+        job=active_job,
+        on_job=on_job,
+        start=0.45,
+        end=0.9,
+    )
+    if lr_code != 0:
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
             500,
             "video_lr_generation_failed",
             "ffmpeg failed to generate LR frames.",
-            details={"stderr": completed.stderr[-2000:]},
+            details={"stderr": lr_stderr[-2000:]},
         )
+    active_job.progress = 0.95
+    active_job.logs = [*active_job.logs[-49:], "Validating generated pairs."]
+    _publish_job(active_job, on_job)
     validation = validate_paired_dataset(target, request.scale, "full")
     path_info = store_asset_path(project_root, target)
     dataset = DatasetObject(
@@ -354,14 +395,81 @@ def generate_video_dataset(project_root: Path, request: VideoGenerationConfig) -
     project = open_project(project_root)
     project.datasets.append(dataset.model_dump())
     write_project(project)
-    job = Job(
-        type="video_dataset_generation",
-        project_id=project.id,
-        object_id=dataset.id,
-        status="completed",
-        progress=1.0,
-        started_at=utc_now_iso(),
-        finished_at=utc_now_iso(),
-        logs=[f"Generated paired HR/LR frames from {source}."],
-    )
-    return project, dataset, job
+    active_job.project_id = project.id
+    active_job.object_id = dataset.id
+    active_job.status = "completed"
+    active_job.progress = 1.0
+    active_job.finished_at = utc_now_iso()
+    active_job.logs = [*active_job.logs[-49:], f"Generated paired HR/LR frames from {source}."]
+    _publish_job(active_job, on_job)
+    return project, dataset, active_job
+
+
+def _video_progress_seconds(source: Path, request: VideoGenerationConfig) -> float | None:
+    if request.frame_limit is not None:
+        return request.frame_limit / request.fps
+    try:
+        completed = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(source),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode == 0:
+            duration = float(completed.stdout.strip())
+            return duration if duration > 0 else None
+    except Exception:
+        return None
+    return None
+
+
+def _run_ffmpeg_progress(
+    cmd: list[str],
+    *,
+    total_seconds: float | None,
+    job: Job,
+    on_job: Callable[[Job], None] | None,
+    start: float,
+    end: float,
+) -> tuple[int, str]:
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    assert process.stdout is not None
+    current: dict[str, str] = {}
+    for line in process.stdout:
+        key, _, value = line.strip().partition("=")
+        if not key:
+            continue
+        current[key] = value
+        if key == "progress":
+            out_time = _progress_seconds(current)
+            if total_seconds and out_time is not None:
+                phase = max(0.0, min(1.0, out_time / total_seconds))
+                job.progress = start + (end - start) * phase
+                _publish_job(job, on_job)
+            current = {}
+    stderr = process.stderr.read() if process.stderr is not None else ""
+    return process.wait(), stderr
+
+
+def _progress_seconds(values: dict[str, str]) -> float | None:
+    raw_ms = values.get("out_time_ms")
+    if raw_ms:
+        try:
+            return float(raw_ms) / 1_000_000
+        except ValueError:
+            return None
+    return None
+
+
+def _publish_job(job: Job, on_job: Callable[[Job], None] | None) -> None:
+    if on_job is not None:
+        on_job(job)

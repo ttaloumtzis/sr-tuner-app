@@ -286,6 +286,13 @@ def list_recent_projects() -> RecentProjectsResponse:
     return RecentProjectsResponse(projects=[_recent_from_record(item) for item in _read_recent_records()])
 
 
+def forget_recent_project(path: str) -> RecentProjectsResponse:
+    root = str(Path(path).expanduser().resolve())
+    records = [item for item in _read_recent_records() if item.get("path") != root]
+    _write_recent_records(records)
+    return list_recent_projects()
+
+
 def workspace_preferences(project_root: Path) -> WorkspacePreferencesResponse:
     workspace = open_project(project_root).workspace
     return WorkspacePreferencesResponse(**workspace.model_dump())
@@ -406,17 +413,65 @@ def video_wizard_metadata(request: VideoGenerationConfig) -> VideoWizardMetadata
     source = Path(request.source_video).expanduser()
     exists = source.is_file()
     estimated = request.frame_limit
-    if estimated is None and request.fps > 0:
-        estimated = None
+    output_size = None
+    if exists and request.fps > 0:
+        metadata = _ffprobe_video_metadata(source)
+        duration = metadata.get("duration")
+        if estimated is None and duration is not None:
+            estimated = max(1, int(duration * request.fps))
+        width = metadata.get("width")
+        height = metadata.get("height")
+        if estimated is not None and width is not None and height is not None:
+            lr_pixels = max(1, (width // request.scale) * (height // request.scale))
+            hr_pixels = width * height
+            output_size = int(estimated * (hr_pixels + lr_pixels) * 0.35)
     return VideoWizardMetadata(
         source_path=str(source),
         exists=exists,
         sampling_strategy=f"{request.fps:g} fps, x{request.scale}, {request.downscale_method}",
         estimated_yield=estimated,
-        output_size_bytes=None,
+        output_size_bytes=output_size,
         deduplication_guidance="Duplicate pruning is not automatic yet; review extracted frames before long training runs.",
         readiness=None if exists else _unsupported("video_missing", "Select an existing source video.", reason="missing_prerequisite"),
     )
+
+
+def _ffprobe_video_metadata(source: Path) -> dict[str, float | int]:
+    completed = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height:format=duration",
+            "-of",
+            "json",
+            str(source),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return {}
+    try:
+        raw = json.loads(completed.stdout)
+    except Exception:
+        return {}
+    stream = (raw.get("streams") or [{}])[0]
+    fmt = raw.get("format") or {}
+    result: dict[str, float | int] = {}
+    for key in ("width", "height"):
+        value = stream.get(key)
+        if isinstance(value, int):
+            result[key] = value
+    try:
+        result["duration"] = float(fmt.get("duration"))
+    except Exception:
+        pass
+    return result
 
 
 def model_template_catalog() -> ModelTemplateCatalogResponse:
@@ -439,31 +494,7 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
         reset_action=ActionState(id="reset", label="Reset to defaults", supported=True),
         save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=True),
     )
-    future = [
-        ("real-esrgan", "Real-ESRGAN", "Production-style restoration template."),
-        ("swinir", "SwinIR", "Transformer SR architecture."),
-        ("hat-l", "HAT-L", "Large hybrid attention SR architecture."),
-    ]
-    templates = [internal]
-    for template_id, name, summary in future:
-        unavailable = _unsupported(f"{template_id}_unsupported", f"{name} is visible for planning but is not trainable in this backend yet.")
-        templates.append(
-            ModelTemplate(
-                id=template_id,
-                display_name=name,
-                architecture_summary=summary,
-                best_for="Future backend support",
-                speed_label="Unavailable",
-                supported_scales=[2, 3, 4],
-                vram_estimate="Unknown",
-                input_crop=128,
-                unavailable=unavailable,
-                import_action=ActionState(id="import", label="Import template", supported=False, reason=unavailable.message),
-                reset_action=ActionState(id="reset", label="Reset to defaults", supported=False, reason=unavailable.message),
-                save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=False, reason=unavailable.message),
-            )
-        )
-    return ModelTemplateCatalogResponse(templates=templates, filters={"support": ["supported", "unsupported"], "scale": ["2", "3", "4", "8"]})
+    return ModelTemplateCatalogResponse(templates=[internal], filters={"support": ["supported"], "scale": ["2", "3", "4", "8"]})
 
 
 def save_template_as_model(project_root: Path, template_id: str, name: str, scale: int) -> ProjectState:
@@ -490,17 +521,13 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
         vram_peak_bytes=None,
         disk_per_checkpoint_bytes=25_000_000,
         low_pair_guard=low_pair,
-        unsupported_losses=[
-            _unsupported("fft_loss_unsupported", "FFT loss is not supported by the internal training path."),
-            _unsupported("perceptual_loss_unsupported", "Perceptual loss is not supported by the internal training path."),
-            _unsupported("gan_loss_unsupported", "Adversarial loss is not supported by the internal training path."),
-        ],
+        unsupported_losses=[],
         suggested_fixes=[
             ActionState(id="lower_batch_size", label="Lower batch size", supported=True),
             ActionState(id="mixed_precision", label="Use mixed precision", supported=True),
         ],
         retention={"checkpoint_cadence": request.checkpoint_cadence, "keep_best_metric": "val_psnr", "max_automatic": None},
-        ema=_unsupported("ema_unsupported", "EMA checkpoints are not supported by the internal training path."),
+        ema=None,
     )
 
 

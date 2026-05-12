@@ -19,6 +19,7 @@ class BackendProcess {
   final BackendLauncherMode _mode;
   final String _sessionToken = _generateSessionToken();
   Process? _process;
+  Future<void>? _disposeFuture;
   final List<String> _log = [];
 
   String get statusLog => _log.take(20).join('\n');
@@ -40,7 +41,10 @@ class BackendProcess {
         command.executable,
         command.arguments,
         workingDirectory: root.path,
-        environment: {'SR_TUNER_SESSION_TOKEN': _sessionToken},
+        environment: {
+          'SR_TUNER_SESSION_TOKEN': _sessionToken,
+          'SR_TUNER_PARENT_PID': pid.toString(),
+        },
       );
       _process!.stdout.transform(SystemEncoding().decoder).listen(_record);
       _process!.stderr.transform(SystemEncoding().decoder).listen(_record);
@@ -123,7 +127,30 @@ class BackendProcess {
   }
 
   Future<void> dispose() async {
-    _process?.kill();
+    final existing = _disposeFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _dispose();
+    _disposeFuture = future;
+    return future;
+  }
+
+  Future<void> _dispose() async {
+    final process = _process;
+    if (process == null) {
+      return;
+    }
+    try {
+      await _client.shutdownBackend().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      process.kill(ProcessSignal.sigterm);
+    }
+    try {
+      await process.exitCode.timeout(const Duration(seconds: 2));
+    } catch (_) {
+      process.kill(ProcessSignal.sigkill);
+    }
     _process = null;
   }
 }

@@ -5,6 +5,14 @@ class AppConfig {
   static const healthPath = '/health';
 
   static Uri apiUri(String path) {
-    return Uri.http('$backendHost:$backendPort', path);
+    final relative = Uri.parse(path.startsWith('/') ? path : '/$path');
+    return Uri(
+      scheme: 'http',
+      host: backendHost,
+      port: backendPort,
+      path: relative.path,
+      query: relative.hasQuery ? relative.query : null,
+      fragment: relative.hasFragment ? relative.fragment : null,
+    );
   }
 }

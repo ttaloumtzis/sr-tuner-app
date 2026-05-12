@@ -17,7 +17,8 @@ class ProjectController extends StatefulWidget {
   State<ProjectController> createState() => _ProjectControllerState();
 }
 
-class _ProjectControllerState extends State<ProjectController> {
+class _ProjectControllerState extends State<ProjectController>
+    with WidgetsBindingObserver {
   final _client = BackendClient();
   final _store = WorkspaceStore();
   late final BackendProcess _backend = BackendProcess(_client);
@@ -26,11 +27,20 @@ class _ProjectControllerState extends State<ProjectController> {
   List<RecentProject> _recentProjects = const [];
   ApiException? _error;
   bool _busy = true;
+  Future<void>? _disposeFuture;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_restoreProject());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(_disposeResources());
+    }
   }
 
   Future<void> _restoreProject() async {
@@ -86,6 +96,28 @@ class _ProjectControllerState extends State<ProjectController> {
     }
   }
 
+  Future<void> _forgetRecentProject(String path) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _backend.ensureStarted();
+      final envelope = await _client.forgetRecentProject(path);
+      if (mounted) {
+        setState(() => _recentProjects = envelope.projects);
+      }
+    } on ApiException catch (error) {
+      setState(() => _error = error);
+    } catch (error) {
+      setState(() => _error = ApiException(error.toString()));
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   Future<void> _createProject(
     String parentPath,
     String name, {
@@ -130,9 +162,24 @@ class _ProjectControllerState extends State<ProjectController> {
 
   @override
   void dispose() {
-    _client.close();
-    unawaited(_backend.dispose());
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_disposeResources());
     super.dispose();
+  }
+
+  Future<void> _disposeResources() {
+    final existing = _disposeFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _disposeResourcesOnce();
+    _disposeFuture = future;
+    return future;
+  }
+
+  Future<void> _disposeResourcesOnce() async {
+    await _backend.dispose();
+    _client.close();
   }
 
   @override
@@ -159,6 +206,7 @@ class _ProjectControllerState extends State<ProjectController> {
       error: _error,
       recentProjects: _recentProjects,
       onRefreshRecent: _loadRecentProjects,
+      onForgetRecent: _forgetRecentProject,
       onCreate: _createProject,
       onOpen: _openProject,
     );

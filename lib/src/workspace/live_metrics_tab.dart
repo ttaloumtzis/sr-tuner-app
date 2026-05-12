@@ -189,6 +189,7 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
           if (snapshot != null && run != null)
             _StatusStrip(
               snapshot: snapshot,
+              run: run,
               busy: _busy,
               onSnapshot: () => _snapshotCheckpoint(run),
               onPause: null,
@@ -247,6 +248,7 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
 class _StatusStrip extends StatelessWidget {
   const _StatusStrip({
     required this.snapshot,
+    required this.run,
     required this.busy,
     required this.onSnapshot,
     required this.onPause,
@@ -254,6 +256,7 @@ class _StatusStrip extends StatelessWidget {
   });
 
   final _LiveSnapshot snapshot;
+  final RunSummary run;
   final bool busy;
   final VoidCallback? onSnapshot;
   final VoidCallback? onPause;
@@ -262,7 +265,6 @@ class _StatusStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = snapshot.status;
-    final run = snapshot.detail.run ?? status.run!;
     return SrSection(
       title: run.name,
       subtitle:

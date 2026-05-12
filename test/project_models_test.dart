@@ -1,7 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sr_tuner/src/app_config.dart';
 import 'package:sr_tuner/src/project_models.dart';
 
 void main() {
+  test('builds backend URIs with query strings intact', () {
+    final uri = AppConfig.apiUri(
+      '/projects/project_1/datasets/dataset_1/detail?preview_index=0',
+    );
+
+    expect(uri.path, '/projects/project_1/datasets/dataset_1/detail');
+    expect(uri.query, 'preview_index=0');
+    expect(uri.toString(), contains('?preview_index=0'));
+    expect(uri.toString(), isNot(contains('%3F')));
+  });
+
   test('parses dashboard and recoverable unavailable states', () {
     final dashboard = DashboardSummary.fromJson({
       'dataset_count': 1,

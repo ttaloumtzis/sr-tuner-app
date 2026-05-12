@@ -36,6 +36,10 @@ class BackendClient {
 
   Future<Map<String, dynamic>> health() => _get('/health');
 
+  Future<void> shutdownBackend() async {
+    await _post('/shutdown', {});
+  }
+
   Future<ProjectEnvelope> createProject({
     required String parentPath,
     required String name,
@@ -56,6 +60,13 @@ class BackendClient {
 
   Future<RecentProjectsEnvelope> recentProjects() async {
     return RecentProjectsEnvelope.fromJson(await _get('/projects/recent'));
+  }
+
+  Future<RecentProjectsEnvelope> forgetRecentProject(String path) async {
+    final response = await _delete(
+      '/projects/recent?path=${Uri.encodeQueryComponent(path)}',
+    );
+    return RecentProjectsEnvelope.fromJson(response);
   }
 
   Future<ProjectEnvelope> openRecentProject(String path) async {
@@ -202,6 +213,26 @@ class BackendClient {
     return ProjectEnvelope.fromJson(response);
   }
 
+  Future<JobState> startVideoDataset({
+    required String projectId,
+    required String name,
+    required String sourceVideo,
+    required int scale,
+    required double fps,
+    int? frameLimit,
+  }) async {
+    final response = await _post('/projects/$projectId/datasets/video/start', {
+      'name': name,
+      'source_video': sourceVideo,
+      'scale': scale,
+      'fps': fps,
+      'frame_limit': frameLimit,
+      'output_format': 'png',
+      'downscale_method': 'bicubic',
+    });
+    return JobState.fromJson(response);
+  }
+
   Future<ProjectEnvelope> createModel({
     required String projectId,
     required String name,
@@ -258,10 +289,19 @@ class BackendClient {
 
   Future<List<DeviceOption>> devices() async {
     final response = await _get('/devices');
-    return [
+    final defaultDevice = response['default_device'] as String? ?? 'cpu';
+    final devices = [
       for (final item in response['devices'] as List<dynamic>? ?? const [])
         DeviceOption.fromJson(item as Map<String, dynamic>),
     ];
+    devices.sort((a, b) {
+      if (a.id == defaultDevice) return -1;
+      if (b.id == defaultDevice) return 1;
+      if (a.id == 'cpu') return 1;
+      if (b.id == 'cpu') return -1;
+      return a.label.compareTo(b.label);
+    });
+    return devices;
   }
 
   Future<ProjectEnvelope> createRun({
@@ -301,6 +341,14 @@ class BackendClient {
       'scheduler_type': schedulerType,
       'diff_mode': diffMode,
     });
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> deleteRunConfig({
+    required String projectId,
+    required String runId,
+  }) async {
+    final response = await _delete('/projects/$projectId/runs/$runId');
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -570,6 +618,15 @@ class BackendClient {
     Map<String, dynamic> body,
   ) async {
     final request = await _jsonRequest('PUT', path, body);
+    return _readJson(await request.close());
+  }
+
+  Future<Map<String, dynamic>> _delete(String path) async {
+    final request = await _httpClient.openUrl('DELETE', AppConfig.apiUri(path));
+    final token = _sessionToken;
+    if (token != null) {
+      request.headers.set('x-sr-tuner-token', token);
+    }
     return _readJson(await request.close());
   }
 

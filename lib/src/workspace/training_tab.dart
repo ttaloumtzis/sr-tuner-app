@@ -47,6 +47,7 @@ class _TrainingTabState extends State<TrainingTab> {
   bool _validationShuffle = true;
   bool _tensorboard = false;
   bool _compile = false;
+  bool _deviceTouched = false;
   bool _busy = false;
   String? _error;
 
@@ -107,7 +108,12 @@ class _TrainingTabState extends State<TrainingTab> {
           _readiness = readiness;
           _devices = devices.isEmpty ? _devices : devices;
           if (!_devices.any((device) => device.id == _device)) {
-            _device = 'cpu';
+            _device = _devices.first.id;
+          } else if (!_deviceTouched && _device == 'cpu') {
+            _device = _devices
+                .where((device) => device.id != 'cpu' && device.available)
+                .firstOrNull
+                ?.id ?? _device;
           }
         });
       }
@@ -250,6 +256,36 @@ class _TrainingTabState extends State<TrainingTab> {
     }
   }
 
+  Future<void> _deleteRun(RunSummary run) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${run.name}?'),
+        content: Text(
+          'This removes the run config and its local run folder. Checkpoints and logs stored under that run will be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _runAction(
+        () => widget.client.deleteRunConfig(
+          projectId: widget.project.id,
+          runId: run.id,
+        ),
+      );
+    }
+  }
+
   Future<void> _runAction(Future<ProjectEnvelope> Function() action) async {
     setState(() {
       _busy = true;
@@ -287,7 +323,12 @@ class _TrainingTabState extends State<TrainingTab> {
     final tokens = srTokens(context);
     final compatible = _selectedCompatible(datasets, models);
     final readiness = _readiness;
-    final canCreate = !_busy && compatible && (readiness?.available ?? false);
+    final canCreate =
+        !_busy &&
+        compatible &&
+        _datasetId != null &&
+        _modelId != null &&
+        _name.text.trim().isNotEmpty;
     return Padding(
       padding: EdgeInsets.all(tokens.gap),
       child: Column(
@@ -362,6 +403,7 @@ class _TrainingTabState extends State<TrainingTab> {
                         busy: _busy,
                         onDevice: (value) {
                           setState(() => _device = value);
+                          _deviceTouched = true;
                           _loadEstimate();
                         },
                         onPrecision: (value) {
@@ -412,10 +454,12 @@ class _TrainingTabState extends State<TrainingTab> {
                         runs: widget.project.runs,
                         datasets: widget.project.datasets,
                         models: widget.project.models,
+                        launchReady: readiness?.available ?? false,
                         busy: _busy,
                         onLaunch: _launch,
                         onPause: _pause,
                         onStop: _stop,
+                        onDelete: _deleteRun,
                       ),
                     ],
                   ),
@@ -607,6 +651,7 @@ class _OptimizerSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
+            key: ValueKey('device-$device-${devices.length}'),
             initialValue: device,
             decoration: const InputDecoration(labelText: 'Device'),
             items: [
@@ -680,7 +725,6 @@ class _LossSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unsupported = estimate?.unsupportedLosses ?? const [];
     return SrSection(
       title: 'Loss',
       child: Column(
@@ -698,12 +742,6 @@ class _LossSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const _LossRow(label: 'L1 pixel loss', supported: true),
-          for (final loss in unsupported)
-            _LossRow(
-              label: loss.actionLabel ?? loss.code,
-              supported: false,
-              message: loss.message,
-            ),
         ],
       ),
     );
@@ -729,7 +767,7 @@ class _EstimateSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = estimate;
     return SrSection(
-      title: 'Estimate and checkpoints',
+      title: 'Setup estimate and launch readiness',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -759,10 +797,6 @@ class _EstimateSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _ReadinessPanel(readiness: readiness),
-          if (value?.ema != null) ...[
-            const SizedBox(height: 12),
-            SrBanner(message: value!.ema!.message, severity: 'warning'),
-          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -770,20 +804,21 @@ class _EstimateSection extends StatelessWidget {
             children: [
               SrChip(label: 'Keep best', selected: true),
               SrChip(label: 'Manual protected', severity: 'success'),
-              SrChip(
-                label: value?.ema?.supported == true
-                    ? 'EMA on'
-                    : 'EMA unavailable',
-                severity: value?.ema?.supported == true ? 'success' : 'warning',
-              ),
             ],
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: canCreate ? onCreate : null,
             icon: const Icon(Icons.add),
-            label: const Text('Create run'),
+            label: const Text('Create configured run'),
           ),
+          if (readiness?.available == false) ...[
+            const SizedBox(height: 8),
+            Text(
+              'You can save this setup now. Install the required training dependencies before launching it.',
+              style: TextStyle(color: srTokens(context).muted),
+            ),
+          ],
           if (busy) ...[
             const SizedBox(height: 12),
             const SrProgressBar(kind: SrProgressKind.indeterminate),
@@ -805,30 +840,87 @@ class _ReadinessPanel extends StatelessWidget {
     if (value == null) {
       return const Text('Checking training dependencies...');
     }
+    final required = value.dependencies.where((item) => item.required);
+    final optional = value.dependencies.where((item) => !item.required);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SrBanner(
+          title: 'Launch readiness',
           message: value.message,
           severity: value.available ? 'success' : 'error',
         ),
         const SizedBox(height: 8),
-        for (final dependency in value.dependencies)
+        for (final dependency in required)
+          _DependencyRow(dependency: dependency),
+        if (optional.isNotEmpty) ...[
+          const SizedBox(height: 6),
           Text(
-            '${dependency.name}: ${dependency.available ? 'available' : 'missing'}',
-            style: TextStyle(color: srTokens(context).muted),
+            'Optional',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: srTokens(context).muted),
           ),
+          for (final dependency in optional)
+            _DependencyRow(dependency: dependency),
+        ],
       ],
     );
   }
 }
 
+class _DependencyRow extends StatelessWidget {
+  const _DependencyRow({required this.dependency});
+
+  final DependencySummary dependency;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final color = dependency.available
+        ? tokens.success
+        : dependency.required
+        ? tokens.danger
+        : tokens.warning;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            dependency.available
+                ? Icons.check_circle_outline
+                : dependency.required
+                ? Icons.error_outline
+                : Icons.info_outline,
+            color: color,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${dependency.name}: ${dependency.available ? 'available' : 'missing'}',
+              style: TextStyle(color: tokens.muted),
+            ),
+          ),
+          SrChip(
+            label: dependency.required ? 'required' : 'optional',
+            severity: dependency.available
+                ? 'success'
+                : dependency.required
+                ? 'error'
+                : 'warning',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LossRow extends StatelessWidget {
-  const _LossRow({required this.label, required this.supported, this.message});
+  const _LossRow({required this.label, required this.supported});
 
   final String label;
   final bool supported;
-  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -839,7 +931,6 @@ class _LossRow extends StatelessWidget {
         supported ? Icons.check_circle_outline : Icons.lock_outline,
       ),
       title: Text(label),
-      subtitle: message == null ? null : Text(message!),
       trailing: Text(supported ? 'Supported' : 'Unavailable'),
     );
   }
@@ -850,19 +941,23 @@ class _RunList extends StatelessWidget {
     required this.runs,
     required this.datasets,
     required this.models,
+    required this.launchReady,
     required this.busy,
     required this.onLaunch,
     required this.onPause,
     required this.onStop,
+    required this.onDelete,
   });
 
   final List<RunSummary> runs;
   final List<DatasetSummary> datasets;
   final List<ModelSummary> models;
+  final bool launchReady;
   final bool busy;
   final ValueChanged<String> onLaunch;
   final ValueChanged<String> onPause;
   final ValueChanged<RunSummary> onStop;
+  final ValueChanged<RunSummary> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -875,7 +970,17 @@ class _RunList extends StatelessWidget {
     return SrSection(
       title: 'All runs',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!launchReady) ...[
+            const SrBanner(
+              title: 'Launch blocked',
+              message:
+                  'Configured runs are saved, but required training dependencies are missing.',
+              severity: 'warning',
+            ),
+            const SizedBox(height: 12),
+          ],
           for (final run in runs)
             Card(
               child: Padding(
@@ -908,7 +1013,10 @@ class _RunList extends StatelessWidget {
                       children: [
                         FilledButton.icon(
                           onPressed:
-                              busy || run.isActive || run.state == 'completed'
+                              busy ||
+                                  !launchReady ||
+                                  run.isActive ||
+                                  run.state == 'completed'
                               ? null
                               : () => onLaunch(run.id),
                           icon: const Icon(Icons.play_arrow),
@@ -927,6 +1035,16 @@ class _RunList extends StatelessWidget {
                               : () => onStop(run),
                           icon: const Icon(Icons.stop),
                           label: const Text('Stop'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: busy || run.isActive
+                              ? null
+                              : () => onDelete(run),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete config'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                         OutlinedButton.icon(
                           onPressed: null,

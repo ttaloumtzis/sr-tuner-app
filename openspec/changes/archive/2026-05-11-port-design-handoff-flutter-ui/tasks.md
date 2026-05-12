@@ -69,17 +69,17 @@
 
 ## 8. Checkpoints And Inference Tabs
 
-- [ ] 8.1 Rebuild Checkpoints populated state with aggregate header, best checkpoint chip, PSNR strip, table columns, star/manual state, best-row styling, tags, row actions, command-click/multi-select comparison affordance, footer hints, prune/compare availability, export best, and continue-from-best.
-- [ ] 8.2 Rebuild Checkpoints empty state with Start training and Import `.pt` placeholder/action state.
-- [ ] 8.3 Rebuild Inference working state with model/checkpoint header, scale/tile fields, batch folder, save result, compare viewer, two-up/slider controls, recent filmstrip with add tile, output inspector including bit depth and sharpness gain when available, quality estimate, tuning controls, and batch drop zone.
-- [ ] 8.4 Rebuild Inference blocked state with warning banner, prerequisite checklist, Go actions, and explainer card.
-- [ ] 8.5 Ensure deleted or unsupported checkpoints disable dependent inference/resume/export actions with clear messages.
-- [ ] 8.6 Add widget tests for checkpoint aggregate actions, manual/star protection, multi-select comparison, pruning unavailable/supported states, best-row styling, inference blocked checklist, compare mode switching, recent filmstrip selection/add tile, inspector bit-depth/sharpness fields, and tuning support states.
+- [x] 8.1 Rebuild Checkpoints populated state with aggregate header, best checkpoint chip, PSNR strip, table columns, star/manual state, best-row styling, tags, row actions, command-click/multi-select comparison affordance, footer hints, prune/compare availability, export best, and continue-from-best.
+- [x] 8.2 Rebuild Checkpoints empty state with Start training and Import `.pt` placeholder/action state.
+- [x] 8.3 Rebuild Inference working state with model/checkpoint header, scale/tile fields, batch folder, save result, compare viewer, two-up/slider controls, recent filmstrip with add tile, output inspector including bit depth and sharpness gain when available, quality estimate, tuning controls, and batch drop zone.
+- [x] 8.4 Rebuild Inference blocked state with warning banner, prerequisite checklist, Go actions, and explainer card.
+- [x] 8.5 Ensure deleted or unsupported checkpoints disable dependent inference/resume/export actions with clear messages.
+- [x] 8.6 Add widget tests for checkpoint aggregate actions, manual/star protection, multi-select comparison, pruning unavailable/supported states, best-row styling, inference blocked checklist, compare mode switching, recent filmstrip selection/add tile, inspector bit-depth/sharpness fields, and tuning support states.
 
 ## 9. Verification And Documentation
 
-- [ ] 9.1 Run backend tests and add fixtures for dashboard, dataset detail, template catalog, live OOM, checkpoint aggregate, and inference inspector responses.
-- [ ] 9.2 Run Flutter analyzer and widget tests.
-- [ ] 9.3 Perform manual Linux desktop smoke test for create project, open recent project, dataset onboarding, model selection, training setup, live empty/error/running states, checkpoints, and inference.
-- [ ] 9.4 Verify no screen has text overflow or incoherent overlap at common desktop window sizes and compact density.
-- [ ] 9.5 Update README or development docs with new UI dependencies, dashboard endpoints, optional platform capabilities, and known unsupported placeholder actions.
+- [x] 9.1 Run backend tests and add fixtures for dashboard, dataset detail, template catalog, live OOM, checkpoint aggregate, and inference inspector responses.
+- [x] 9.2 Run Flutter analyzer and widget tests.
+- [x] 9.3 Perform manual Linux desktop smoke test for create project, open recent project, dataset onboarding, model selection, training setup, live empty/error/running states, checkpoints, and inference.
+- [x] 9.4 Verify no screen has text overflow or incoherent overlap at common desktop window sizes and compact density.
+- [x] 9.5 Update README or development docs with new UI dependencies, dashboard endpoints, optional platform capabilities, and known unsupported placeholder actions.

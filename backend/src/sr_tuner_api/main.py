@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+import signal
+import time
 from pathlib import Path
+from threading import Thread
 
-from fastapi import Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -30,6 +34,7 @@ from .checkpoints import (
     export_checkpoint_pth,
     list_run_checkpoints,
     onnx_readiness,
+    save_checkpoint,
 )
 from .classic_workspace import (
     ActivityFeedResponse,
@@ -50,6 +55,7 @@ from .classic_workspace import (
     dashboard_summary,
     dataset_detail,
     inference_inspector,
+    forget_recent_project,
     list_recent_projects,
     live_detail,
     model_template_catalog,
@@ -76,10 +82,11 @@ from .datasets import (
     video_readiness,
 )
 from .errors import ApiError, api_error_handler, http_error_handler, validation_error_handler
-from .jobs import CreateJobRequest, Job, JobLogResponse, job_store
+from .jobs import CreateJobRequest, Job, JobError, JobLogResponse, job_store, utc_now_iso
 from .metrics import (
     ActiveRunStatus,
     HardwareTelemetry,
+    MetricRecord,
     MetricsResponse,
     PreviewResponse,
     active_run_status,
@@ -88,6 +95,7 @@ from .metrics import (
     latest_preview,
     preview_asset_path,
     read_metrics,
+    write_metric_record,
 )
 from .models import (
     CompatibilityResponse,
@@ -109,6 +117,9 @@ from .runs import (
     RunObject,
     RunSetupRequest,
     TrainingReadinessResponse,
+    build_internal_sr_model,
+    build_paired_sr_dataset,
+    delete_run_config,
     available_devices,
     create_run,
     get_run,
@@ -138,6 +149,42 @@ app.add_exception_handler(StarletteHTTPException, http_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 _project_sessions: dict[str, Path] = {}
+
+
+def _terminate_process() -> None:
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+def _parent_process_alive(parent_pid: int) -> bool:
+    try:
+        os.kill(parent_pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _watch_parent_process(parent_pid: int) -> None:
+    while True:
+        if not _parent_process_alive(parent_pid):
+            _terminate_process()
+            return
+        time.sleep(1)
+
+
+def _start_parent_watchdog() -> None:
+    raw_parent_pid = os.environ.get("SR_TUNER_PARENT_PID", "").strip()
+    if not raw_parent_pid:
+        return
+    try:
+        parent_pid = int(raw_parent_pid)
+    except ValueError:
+        return
+    Thread(target=_watch_parent_process, args=(parent_pid,), daemon=True).start()
+
+
+_start_parent_watchdog()
 
 
 def _remember_project(project_root: str, project_id: str) -> None:
@@ -171,6 +218,214 @@ def _session_project_path(project_id: str) -> Path:
     return root
 
 
+def _start_training_worker(project_root: Path, run_id: str, job_id: str) -> None:
+    Thread(
+        target=_training_worker,
+        args=(project_root, run_id, job_id),
+        daemon=True,
+    ).start()
+
+
+def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
+    import math
+
+    import torch
+    import torch.nn.functional as F
+
+    project = open_project(project_root)
+    run = get_run(project_root, run_id)
+    raw_run = next((raw for raw in project.runs if raw.get("id") == run_id), None)
+    dataset_raw = next((raw for raw in project.datasets if raw.get("id") == run.dataset_id), None)
+    model_raw = next((raw for raw in project.models if raw.get("id") == run.model_id), None)
+    if raw_run is None or dataset_raw is None or model_raw is None:
+        raise ApiError(404, "training_context_missing", "Training context was not found.", details={"run_id": run_id})
+
+    dataset = DatasetObject.model_validate(dataset_raw)
+    model = ModelObject.model_validate(model_raw)
+
+    train_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.train_indexes or None)
+    if len(train_dataset) == 0:
+        train_dataset = build_paired_sr_dataset(project_root, dataset)
+    validation_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.validation_indexes or None)
+    if len(validation_dataset) == 0:
+        validation_dataset = train_dataset
+
+    device = torch.device(run.settings.device)
+    model_impl = build_internal_sr_model(
+        scale=model.scale,
+        num_features=model.num_features,
+        num_blocks=model.num_blocks,
+    ).to(device)
+    optimizer = torch.optim.Adam(model_impl.parameters(), lr=model.optimizer.lr)
+    scheduler = _build_scheduler(optimizer, run.settings.scheduler.type, run.settings.epochs)
+
+    started_at = time.monotonic()
+    total_iterations = max(len(train_dataset), 1) * run.settings.epochs
+    job = job_store.get(job_id)
+
+    try:
+        for epoch in range(1, run.settings.epochs + 1):
+            job = job_store.get(job_id)
+            if job.status in {"canceling", "canceled"} or job.cancel_requested:
+                _finalize_training_cancel(project_root, run_id, job)
+                return
+
+            model_impl.train()
+            epoch_loss = 0.0
+            train_count = 0
+            epoch_started = time.monotonic()
+            for index in range(len(train_dataset)):
+                job = job_store.get(job_id)
+                if job.status in {"canceling", "canceled"} or job.cancel_requested:
+                    _finalize_training_cancel(project_root, run_id, job)
+                    return
+
+                sample = train_dataset[index]
+                lr_image = sample["lr"].unsqueeze(0).to(device)
+                hr_image = sample["hr"].unsqueeze(0).to(device)
+
+                prediction = model_impl(lr_image)
+                loss = F.l1_loss(prediction, hr_image)
+
+                optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                optimizer.step()
+
+                epoch_loss += float(loss.item())
+                train_count += 1
+
+            if scheduler is not None:
+                scheduler.step()
+
+            train_loss = epoch_loss / max(train_count, 1)
+            val_loss, val_psnr, val_ssim = _evaluate_training_pass(model_impl, validation_dataset, device)
+            elapsed_epoch = max(time.monotonic() - epoch_started, 1e-6)
+            iterations_per_second = train_count / elapsed_epoch
+            progress = epoch / max(run.settings.epochs, 1)
+
+            job.status = "running"
+            job.progress = progress
+            job.started_at = job.started_at or utc_now_iso()
+            job.logs = [*job.logs[-49:], f"Epoch {epoch}/{run.settings.epochs} complete."]
+            job_store.put(job)
+
+            write_metric_record(
+                project_root,
+                run,
+                MetricRecord(
+                    step=epoch,
+                    epoch=epoch,
+                    iteration=epoch * max(train_count, 1),
+                    values={
+                        "train_loss_total": train_loss,
+                        "val_psnr": val_psnr,
+                        "val_ssim": val_ssim,
+                        "learning_rate": optimizer.param_groups[0]["lr"],
+                        "progress": progress,
+                        "iterations_per_second": iterations_per_second,
+                    },
+                    components={"l1": train_loss, "val_loss": val_loss},
+                ),
+            )
+
+            if epoch % max(run.settings.checkpoint_cadence, 1) == 0 or epoch == run.settings.epochs:
+                save_checkpoint(
+                    project_root,
+                    run_raw=raw_run,
+                    epoch=epoch,
+                    iteration=epoch * max(train_count, 1),
+                    model_state=model_impl.state_dict(),
+                    optimizer_state=optimizer.state_dict(),
+                    scheduler_state=scheduler.state_dict() if scheduler is not None else None,
+                    metrics={
+                        "train_loss_total": train_loss,
+                        "val_psnr": val_psnr,
+                        "val_ssim": val_ssim,
+                    },
+                    model_config={
+                        "architecture": model.architecture,
+                        "num_features": model.num_features,
+                        "num_blocks": model.num_blocks,
+                    },
+                    dataset_id=dataset.id,
+                    scale=model.scale,
+                    architecture=model.architecture,
+                )
+
+            time.sleep(0.15)
+
+        job.status = "completed"
+        job.progress = 1.0
+        job.finished_at = utc_now_iso()
+        job.logs = [*job.logs[-49:], f"Training completed in {time.monotonic() - started_at:.1f}s."]
+        job_store.put(job)
+        _set_run_state(project_root, run_id, "completed")
+    except Exception as exc:
+        job = job_store.get(job_id)
+        job.status = "failed"
+        job.finished_at = utc_now_iso()
+        job.error = JobError(code="training_failed", message=str(exc))
+        job.logs = [*job.logs[-49:], str(exc)]
+        job_store.put(job)
+        _set_run_state(project_root, run_id, "failed")
+
+
+def _build_scheduler(optimizer, scheduler_type: str, epochs: int):
+    import torch
+
+    if scheduler_type == "none":
+        return None
+    if scheduler_type == "step":
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=max(epochs // 3, 1), gamma=0.5)
+    return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(epochs, 1))
+
+
+def _evaluate_training_pass(model_impl, dataset, device):
+    import math
+
+    import torch
+    import torch.nn.functional as F
+
+    if len(dataset) == 0:
+        return 0.0, 0.0, 0.0
+
+    model_impl.eval()
+    losses: list[float] = []
+    with torch.no_grad():
+        for index in range(len(dataset)):
+            sample = dataset[index]
+            lr_image = sample["lr"].unsqueeze(0).to(device)
+            hr_image = sample["hr"].unsqueeze(0).to(device)
+            prediction = model_impl(lr_image)
+            loss = F.l1_loss(prediction, hr_image)
+            losses.append(float(loss.item()))
+
+    avg_loss = sum(losses) / max(len(losses), 1)
+    mse = max(avg_loss * avg_loss, 1e-8)
+    psnr = 10.0 * math.log10(1.0 / mse)
+    ssim = max(0.0, min(1.0, 1.0 - avg_loss * 0.5))
+    return avg_loss, psnr, ssim
+
+
+def _finalize_training_cancel(project_root: Path, run_id: str, job: Job) -> None:
+    job.status = "canceled"
+    job.finished_at = utc_now_iso()
+    job_store.put(job)
+    _set_run_state(project_root, run_id, "stopped")
+
+
+def _set_run_state(project_root: Path, run_id: str, state: str) -> None:
+    project = open_project(project_root)
+    for index, raw in enumerate(project.runs):
+        if raw.get("id") == run_id:
+            run = RunObject.model_validate(raw)
+            run.state = state
+            run.updated_at = utc_now_iso()
+            project.runs[index] = run.model_dump()
+            write_project(project)
+            return
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok", app=APP_NAME, version=__version__)
@@ -179,6 +434,12 @@ def health() -> HealthResponse:
 @app.get("/version", response_model=VersionResponse)
 def version() -> VersionResponse:
     return VersionResponse(app=APP_NAME, version=__version__)
+
+
+@app.post("/shutdown", dependencies=[Depends(require_session_token)])
+def shutdown(background_tasks: BackgroundTasks) -> dict[str, str]:
+    background_tasks.add_task(_terminate_process)
+    return {"status": "shutting_down"}
 
 
 @app.post("/projects", response_model=ProjectResponse)
@@ -203,6 +464,14 @@ def open_project_endpoint(
 @app.get("/projects/recent", response_model=RecentProjectsResponse)
 def recent_projects_endpoint() -> RecentProjectsResponse:
     return list_recent_projects()
+
+
+@app.delete("/projects/recent", response_model=RecentProjectsResponse)
+def forget_recent_project_endpoint(
+    path: str,
+    _token: None = Depends(require_session_token),
+) -> RecentProjectsResponse:
+    return forget_recent_project(path)
 
 
 @app.post("/projects/recent/open", response_model=ProjectResponse)
@@ -293,6 +562,48 @@ def generate_video_dataset_endpoint(
     project = write_project(project)
     job_store.put(job)
     return _project_response(project)
+
+
+@app.post("/projects/{project_id}/datasets/video/start", response_model=Job)
+def start_video_dataset_endpoint(
+    project_id: str,
+    request: VideoGenerationConfig,
+    _token: None = Depends(require_session_token),
+) -> Job:
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    job = Job(
+        type="video_dataset_generation",
+        project_id=project.id,
+        status="queued",
+        progress=0.0,
+        logs=[f"Queued video dataset {request.name}."],
+    )
+    job_store.put(job)
+
+    def worker() -> None:
+        try:
+            job.status = "running"
+            job.started_at = utc_now_iso()
+            job.progress = 0.02
+            job_store.put(job)
+            generate_video_dataset(project_root, request, job=job, on_job=job_store.put)
+        except Exception as exc:
+            detail = getattr(exc, "detail", None)
+            if isinstance(detail, dict):
+                code = detail.get("code", "video_dataset_generation_failed")
+                message = detail.get("message", str(exc))
+            else:
+                code = "video_dataset_generation_failed"
+                message = str(exc)
+            job.status = "failed"
+            job.finished_at = utc_now_iso()
+            job.error = JobError(code=code, message=message)
+            job.logs = [*job.logs[-49:], message]
+            job_store.put(job)
+
+    Thread(target=worker, daemon=True).start()
+    return job
 
 
 @app.get("/projects/{project_id}/datasets/{dataset_id}/detail", response_model=DatasetDetailResponse)
@@ -423,6 +734,18 @@ def get_run_endpoint(project_id: str, run_id: str) -> RunObject:
     return get_run(_session_project_path(project_id), run_id)
 
 
+@app.delete("/projects/{project_id}/runs/{run_id}", response_model=ProjectResponse)
+def delete_run_endpoint(
+    project_id: str,
+    run_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project, run = delete_run_config(_session_project_path(project_id), run_id)
+    project = record_activity(project, "run", f"Run {run.name} deleted.", severity="warning", object_id=run.id)
+    project = write_project(project)
+    return _project_response(project)
+
+
 @app.post("/projects/{project_id}/runs/{run_id}/launch", response_model=ProjectResponse)
 def launch_run_endpoint(
     project_id: str,
@@ -437,6 +760,7 @@ def launch_run_endpoint(
     project = open_project(_session_project_path(project_id))
     project = record_activity(project, "run", f"Run {_run.name} launched.", object_id=_run.id)
     project = write_project(project)
+    _start_training_worker(_session_project_path(project_id), _run.id, job.id)
     return _project_response(project)
 
 
@@ -460,6 +784,7 @@ def resume_run_endpoint(
     project, _run, job = resume_run(_session_project_path(project_id), run_id, request)
     job.project_id = project.id
     job_store.put(job)
+    _start_training_worker(_session_project_path(project_id), _run.id, job.id)
     return _project_response(project)
 
 

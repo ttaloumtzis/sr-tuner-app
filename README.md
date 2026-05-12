@@ -91,7 +91,20 @@ scripts/clean.sh --venv    # also removes backend/.venv (run uv sync --project b
 Install in the backend environment:
 
 ```sh
-uv add --project backend torch pillow
+scripts/setup_backend_cpu.sh
+```
+
+For AMD GPUs on Linux with ROCm, install the ROCm PyTorch wheel build instead:
+
+```sh
+scripts/setup_backend_rocm.sh
+```
+
+The ROCm script defaults to the current PyTorch ROCm 7.1 wheel index:
+`https://download.pytorch.org/whl/rocm7.1`. Override it if your installed ROCm stack needs another wheel stream:
+
+```sh
+ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.4 scripts/setup_backend_rocm.sh
 ```
 
 ### Optional
@@ -167,10 +180,58 @@ The backend validates that `torch.utils.tensorboard` or `tensorboard` is importa
 
 ---
 
-## CPU-first limitations
+## Runtime Notes
 
-- Training defaults to CPU. GPU support (CUDA, ROCm, DirectML) requires installing the appropriate PyTorch build and is detected at runtime via `/devices`.
+- Training always offers CPU. AMD ROCm GPUs are detected through the ROCm PyTorch build; PyTorch exposes ROCm devices through `torch.cuda`, and the UI labels them as `ROCm`.
 - Mixed precision (`float16`) is available but may not accelerate training on CPU-only builds.
 - `torch.compile` is disabled by default on CPU; enabling it may not improve performance.
 - ONNX export requires `onnx` and `onnxruntime` to be installed separately.
 - Large image inference is handled via tiled inference; OOM errors on CPU return recoverable guidance suggesting smaller tile sizes.
+
+---
+
+## Classic Workspace UI
+
+The Classic Workspace UI provides a beginner-friendly desktop interface with the following tabs:
+
+| Tab | Description |
+|---|---|
+| **Overview** | Project dashboard with metrics, recent activity, next-step guidance, and loss sparkline |
+| **Dataset** | Source management, health checks, preview pane, and video import wizard |
+| **Model** | Template catalog with filter/import controls, hyperparameters, and non-destructive switching |
+| **Training** | Three-column layout for run configuration, estimates, and all-runs view |
+| **Live** | Active run monitoring with progress, charts, validation samples, and OOM remediation |
+| **Checkpoints** | Aggregate checkpoint view with PSNR strip, ranking, pruning, and comparison |
+| **Inference** | Before/after compare viewer, inspector, tuning controls, and batch processing |
+
+### Dashboard endpoints
+
+The UI uses several backend view-model endpoints for dashboard state:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /projects/{id}/dashboard` | Project summary with counts, best PSNR, active run state, disk status |
+| `GET /projects/{id}/activity` | Recent activity feed for dataset, model, run, checkpoint, and inference events |
+| `GET /projects/{id}/workspace` | Workspace preferences (theme, density, selected tab, per-project UI state) |
+| `GET /projects/recent` | Recent projects with stale/missing path detection |
+| `GET /projects/{id}/checkpoints/aggregate` | Checkpoint aggregate with best checkpoint, PSNR trend, and row actions |
+
+### Known unsupported actions
+
+The following features are gated behind unavailable states in this version:
+
+| Feature | State |
+|---|---|
+| `.srtproj archive` import/export | Disabled placeholder — projects are folders with `sr-tuner.project.json` as the only manifest |
+| Checkpoint comparison | Disabled if fewer than 2 checkpoints selected |
+| Checkpoint pruning | Disabled when automatic pruning policy is not configured |
+| Dataset re-synthesis | Disabled if not supported by backend |
+| Model template import | Disabled if import is not available for the selected template |
+
+### Optional platform capabilities
+
+| Capability | Platform | Notes |
+|---|---|---|
+| Desktop drag/drop for onboarding | Linux (when available) | Falls back to native file/folder picker |
+| Show in folder | Native file manager | Guarded behind capability checks |
+| IBM Plex font | Bundled | If unavailable, system font is used |

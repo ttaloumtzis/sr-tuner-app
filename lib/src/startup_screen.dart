@@ -14,6 +14,7 @@ class StartupScreen extends StatefulWidget {
     required this.error,
     required this.recentProjects,
     required this.onRefreshRecent,
+    required this.onForgetRecent,
     required this.onCreate,
     required this.onOpen,
     super.key,
@@ -23,6 +24,7 @@ class StartupScreen extends StatefulWidget {
   final ApiException? error;
   final List<RecentProject> recentProjects;
   final Future<void> Function() onRefreshRecent;
+  final Future<void> Function(String path) onForgetRecent;
   final Future<void> Function(String parentPath, String name, {bool createHere})
   onCreate;
   final Future<void> Function(String path) onOpen;
@@ -123,6 +125,7 @@ class _StartupScreenState extends State<StartupScreen> {
                           onFilterChanged: (value) =>
                               setState(() => _filter = value),
                           onRefresh: widget.onRefreshRecent,
+                          onForget: widget.onForgetRecent,
                           onOpen: widget.onOpen,
                         );
                         if (narrow) {
@@ -346,6 +349,7 @@ class _RecentColumn extends StatelessWidget {
     required this.recentProjects,
     required this.onFilterChanged,
     required this.onRefresh,
+    required this.onForget,
     required this.onOpen,
   });
 
@@ -355,6 +359,7 @@ class _RecentColumn extends StatelessWidget {
   final List<RecentProject> recentProjects;
   final ValueChanged<String> onFilterChanged;
   final Future<void> Function() onRefresh;
+  final Future<void> Function(String path) onForget;
   final Future<void> Function(String path) onOpen;
 
   @override
@@ -415,9 +420,11 @@ class _RecentColumn extends StatelessWidget {
                   final project = recentProjects[index];
                   return _RecentCard(
                     project: project,
+                    busy: busy,
                     onOpen: project.status == 'available'
                         ? () => onOpen(project.path)
                         : null,
+                    onForget: () => _confirmForget(context, project),
                   );
                 },
               ),
@@ -426,13 +433,48 @@ class _RecentColumn extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _confirmForget(
+    BuildContext context,
+    RecentProject project,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove recent project?'),
+        content: Text(
+          'This only removes ${project.name} from the recent list. The project folder is not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      await onForget(project.path);
+    }
+  }
 }
 
 class _RecentCard extends StatelessWidget {
-  const _RecentCard({required this.project, required this.onOpen});
+  const _RecentCard({
+    required this.project,
+    required this.busy,
+    required this.onOpen,
+    required this.onForget,
+  });
 
   final RecentProject project;
+  final bool busy;
   final VoidCallback? onOpen;
+  final VoidCallback onForget;
 
   @override
   Widget build(BuildContext context) {
@@ -484,6 +526,11 @@ class _RecentCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Remove from recent projects',
+              onPressed: busy ? null : onForget,
+              icon: const Icon(Icons.close),
+            ),
             IconButton(
               tooltip: onOpen == null ? project.statusMessage : 'Open project',
               onPressed: onOpen,

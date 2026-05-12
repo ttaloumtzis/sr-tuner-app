@@ -9,7 +9,10 @@ import '../project_models.dart';
 
 extension _FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+  T? get lastOrNull => isEmpty ? null : last;
 }
+
+enum _DatasetCreateChoice { paired, video }
 
 class DatasetTab extends StatefulWidget {
   const DatasetTab({
@@ -42,6 +45,7 @@ class _DatasetTabState extends State<DatasetTab> {
   String _storageOperation = 'reference';
   bool _busy = false;
   String? _error;
+  String? _selectedDatasetId;
   VideoReadiness? _videoReadiness;
   DatasetDetail? _detail;
   VideoWizardMetadata? _videoMetadata;
@@ -81,8 +85,40 @@ class _DatasetTabState extends State<DatasetTab> {
     } catch (_) {}
   }
 
-  Future<void> _loadDetail({int? previewIndex}) async {
-    final dataset = widget.project.datasets.firstOrNull;
+  DatasetSummary? _selectedDataset(ProjectState project) {
+    final selectedId = _selectedDatasetId;
+    if (selectedId != null) {
+      final selected = project.datasets
+          .where((dataset) => dataset.id == selectedId)
+          .firstOrNull;
+      if (selected != null) {
+        return selected;
+      }
+    }
+    return project.datasets.firstOrNull;
+  }
+
+  String? _newDatasetId(ProjectState previous, ProjectState next) {
+    final previousIds = previous.datasets.map((dataset) => dataset.id).toSet();
+    for (final dataset in next.datasets.reversed) {
+      if (!previousIds.contains(dataset.id)) {
+        return dataset.id;
+      }
+    }
+    return next.datasets.lastOrNull?.id;
+  }
+
+  Future<void> _loadDetail({
+    ProjectState? project,
+    String? datasetId,
+    int? previewIndex,
+  }) async {
+    final sourceProject = project ?? widget.project;
+    final dataset = datasetId == null
+        ? _selectedDataset(sourceProject)
+        : sourceProject.datasets
+              .where((dataset) => dataset.id == datasetId)
+              .firstOrNull;
     if (dataset == null) {
       if (mounted) {
         setState(() => _detail = null);
@@ -99,6 +135,7 @@ class _DatasetTabState extends State<DatasetTab> {
       if (mounted) {
         setState(() {
           _detail = detail;
+          _selectedDatasetId = dataset.id;
           _previewIndex = detail.preview.index;
         });
       }
@@ -114,6 +151,103 @@ class _DatasetTabState extends State<DatasetTab> {
     if (path != null) {
       _path.text = path;
     }
+  }
+
+  Future<void> _showCreateDatasetDialog() async {
+    if (!mounted) {
+      return;
+    }
+    final choice = await showDialog<_DatasetCreateChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create dataset'),
+        content: SizedBox(
+          width: 560,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _DatasetChoiceTile(
+                icon: Icons.folder_copy_outlined,
+                title: 'Type 1 · Paired folders',
+                message:
+                    'Register existing LR/HR image folders with matching filenames.',
+                onPressed: () =>
+                    Navigator.pop(context, _DatasetCreateChoice.paired),
+              ),
+              const SizedBox(height: 12),
+              _DatasetChoiceTile(
+                icon: Icons.video_file_outlined,
+                title: 'Type 2 · Extract from video',
+                message:
+                    'Create LR/HR pairs by sampling frames from a video source.',
+                onPressed: () =>
+                    Navigator.pop(context, _DatasetCreateChoice.video),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) {
+      return;
+    }
+    switch (choice) {
+      case _DatasetCreateChoice.paired:
+        await _showPairedDatasetDialog();
+      case _DatasetCreateChoice.video:
+        await _showVideoWizard();
+    }
+  }
+
+  Future<void> _showPairedDatasetDialog() async {
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Type 1 dataset'),
+        content: SizedBox(
+          width: 760,
+          child: _PairedDatasetForm(
+            busy: _busy,
+            name: _name,
+            path: _path,
+            scale: _scale,
+            validationMode: _validationMode,
+            storageOperation: _storageOperation,
+            onPickFolder: _pickDataset,
+            onScaleChanged: (value) => setState(() => _scale = value),
+            onValidationChanged: (value) =>
+                setState(() => _validationMode = value),
+            onStorageChanged: (value) =>
+                setState(() => _storageOperation = value),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: _busy
+                ? null
+                : () {
+                    Navigator.pop(context);
+                    _register();
+                  },
+            icon: const Icon(Icons.add),
+            label: const Text('Create dataset'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickVideo() async {
@@ -164,8 +298,10 @@ class _DatasetTabState extends State<DatasetTab> {
         validationMode: _validationMode,
         storageOperation: _storageOperation,
       );
+      final nextDatasetId = _newDatasetId(widget.project, envelope.project);
+      _selectedDatasetId = nextDatasetId;
       widget.onProjectChanged(envelope.project);
-      await _loadDetail();
+      await _loadDetail(project: envelope.project, datasetId: nextDatasetId);
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
@@ -208,13 +344,21 @@ class _DatasetTabState extends State<DatasetTab> {
     return result ?? false;
   }
 
-  Future<void> _generateVideoDataset() async {
+  Future<void> _refreshProjectAfterDatasetJob() async {
+    final envelope = await widget.client.openProject(widget.project.rootPath);
+    final nextDatasetId = _newDatasetId(widget.project, envelope.project);
+    _selectedDatasetId = nextDatasetId;
+    widget.onProjectChanged(envelope.project);
+    await _loadDetail(project: envelope.project, datasetId: nextDatasetId);
+  }
+
+  Future<JobState> _startVideoDataset() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final envelope = await widget.client.generateVideoDataset(
+      return await widget.client.startVideoDataset(
         projectId: widget.project.id,
         name: _videoName.text.trim(),
         sourceVideo: _videoPath.text.trim(),
@@ -222,15 +366,27 @@ class _DatasetTabState extends State<DatasetTab> {
         fps: double.tryParse(_videoFps.text.trim()) ?? 1.0,
         frameLimit: int.tryParse(_frameLimit.text.trim()),
       );
-      widget.onProjectChanged(envelope.project);
-      await _loadDetail();
     } catch (error) {
       setState(() => _error = error.toString());
+      rethrow;
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
     }
+  }
+
+  Future<void> _generateVideoDatasetWithProgress() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _DatasetCreationProgressDialog(
+        title: 'Creating Type 2 dataset',
+        start: _startVideoDataset,
+        getJob: widget.client.getJob,
+        onCompleted: _refreshProjectAfterDatasetJob,
+      ),
+    );
   }
 
   Future<void> _showVideoWizard() async {
@@ -269,7 +425,7 @@ class _DatasetTabState extends State<DatasetTab> {
                 ? null
                 : () {
                     Navigator.pop(context);
-                    _generateVideoDataset();
+                    _generateVideoDatasetWithProgress();
                   },
             icon: const Icon(Icons.movie_creation_outlined),
             label: const Text('Generate dataset'),
@@ -288,19 +444,7 @@ class _DatasetTabState extends State<DatasetTab> {
           ? _DatasetEmptyState(
               busy: _busy,
               videoMessage: _videoReadiness?.message ?? 'Checking video tools.',
-              onVideo: _showVideoWizard,
-              onPickFolder: _pickDataset,
-              onRegister: _register,
-              name: _name,
-              path: _path,
-              scale: _scale,
-              validationMode: _validationMode,
-              storageOperation: _storageOperation,
-              onScaleChanged: (value) => setState(() => _scale = value),
-              onValidationChanged: (value) =>
-                  setState(() => _validationMode = value),
-              onStorageChanged: (value) =>
-                  setState(() => _storageOperation = value),
+              onCreateDataset: _showCreateDatasetDialog,
               error: _error,
             )
           : _DatasetPopulatedState(
@@ -308,10 +452,18 @@ class _DatasetTabState extends State<DatasetTab> {
               detail: _detail,
               error: _error,
               busy: _busy,
-              onAddSource: _pickDataset,
-              onRescan: _loadDetail,
+              selectedDatasetId: _selectedDatasetId,
+              onCreateDataset: _showCreateDatasetDialog,
+              onDatasetSelected: (datasetId) {
+                setState(() {
+                  _selectedDatasetId = datasetId;
+                  _detail = null;
+                  _previewIndex = 0;
+                  _error = null;
+                });
+                _loadDetail(datasetId: datasetId, previewIndex: 0);
+              },
               onExport: () {},
-              onVideo: _showVideoWizard,
               onPreview: (index) => _loadDetail(previewIndex: index),
             ),
     );
@@ -322,33 +474,13 @@ class _DatasetEmptyState extends StatelessWidget {
   const _DatasetEmptyState({
     required this.busy,
     required this.videoMessage,
-    required this.onVideo,
-    required this.onPickFolder,
-    required this.onRegister,
-    required this.name,
-    required this.path,
-    required this.scale,
-    required this.validationMode,
-    required this.storageOperation,
-    required this.onScaleChanged,
-    required this.onValidationChanged,
-    required this.onStorageChanged,
+    required this.onCreateDataset,
     this.error,
   });
 
   final bool busy;
   final String videoMessage;
-  final VoidCallback onVideo;
-  final VoidCallback onPickFolder;
-  final VoidCallback onRegister;
-  final TextEditingController name;
-  final TextEditingController path;
-  final int scale;
-  final String validationMode;
-  final String storageOperation;
-  final ValueChanged<int> onScaleChanged;
-  final ValueChanged<String> onValidationChanged;
-  final ValueChanged<String> onStorageChanged;
+  final VoidCallback onCreateDataset;
   final String? error;
 
   @override
@@ -362,161 +494,48 @@ class _DatasetEmptyState extends StatelessWidget {
               'Start with a small, clean set of matching low-resolution and high-resolution pairs. Folders remain referenced unless you choose copy or move.',
           severity: 'info',
         ),
+        SizedBox(height: tokens.compactGap),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: busy ? null : onCreateDataset,
+            icon: const Icon(Icons.add),
+            label: const Text('Create dataset'),
+          ),
+        ),
         SizedBox(height: tokens.gap),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _OnboardingCard(
-                icon: Icons.video_file_outlined,
-                title: 'Extract from video',
-                message: videoMessage,
-                action: 'Open wizard',
-                onPressed: busy ? null : onVideo,
+                icon: Icons.folder_copy_outlined,
+                title: 'Type 1 paired folders',
+                message: 'Register existing HR/LR folders by filename stem.',
+                action: 'Create dataset',
+                onPressed: busy ? null : onCreateDataset,
               ),
             ),
             SizedBox(width: tokens.gap),
             Expanded(
               child: _OnboardingCard(
-                icon: Icons.folder_open,
-                title: 'Folder of images',
-                message: 'Register an LR/HR folder pair or generated dataset.',
-                action: 'Choose folder',
-                onPressed: busy ? null : onPickFolder,
-              ),
-            ),
-            SizedBox(width: tokens.gap),
-            const Expanded(
-              child: _OnboardingCard(
-                icon: Icons.inventory_2_outlined,
-                title: 'Pre-made pairs',
-                message:
-                    'Use existing paired data with x2, x3, x4, or x8 scale.',
-                action: 'Unavailable',
+                icon: Icons.video_file_outlined,
+                title: 'Type 2 from video',
+                message: videoMessage,
+                action: 'Create dataset',
+                onPressed: busy ? null : onCreateDataset,
               ),
             ),
           ],
         ),
-        SizedBox(height: tokens.gap),
-        SrSection(
-          title: 'Register paired dataset',
-          subtitle: 'Native folder picker fallback for desktop drag/drop.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SrImagePlaceholder(
-                label: 'Drop a dataset folder here, or use the picker fallback',
-                aspectRatio: 8,
-              ),
-              SizedBox(height: tokens.compactGap),
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              SizedBox(height: tokens.compactGap),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: path,
-                      decoration: const InputDecoration(
-                        labelText: 'Paired dataset folder',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    tooltip: 'Select dataset folder',
-                    onPressed: busy ? null : onPickFolder,
-                    icon: const Icon(Icons.folder_open),
-                  ),
-                ],
-              ),
-              SizedBox(height: tokens.compactGap),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      isExpanded: true,
-                      initialValue: scale,
-                      decoration: const InputDecoration(labelText: 'Scale'),
-                      items: const [2, 3, 4, 8]
-                          .map(
-                            (value) => DropdownMenuItem(
-                              value: value,
-                              child: Text('x$value'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: busy
-                          ? null
-                          : (value) => onScaleChanged(value ?? 4),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: validationMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Validation',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'quick', child: Text('Quick')),
-                        DropdownMenuItem(value: 'full', child: Text('Full')),
-                      ],
-                      onChanged: busy
-                          ? null
-                          : (value) => onValidationChanged(value ?? 'quick'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: storageOperation,
-                      decoration: const InputDecoration(labelText: 'Storage'),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'reference',
-                          child: Text('Reference external'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'copy',
-                          child: Text('Copy into project'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'move',
-                          child: Text('Move into project'),
-                        ),
-                      ],
-                      onChanged: busy
-                          ? null
-                          : (value) => onStorageChanged(value ?? 'reference'),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: tokens.compactGap),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: busy ? null : onRegister,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Register dataset'),
-                ),
-              ),
-              if (busy) ...[
-                SizedBox(height: tokens.compactGap),
-                const SrProgressBar(kind: SrProgressKind.indeterminate),
-              ],
-              if (error != null) ...[
-                SizedBox(height: tokens.compactGap),
-                SrBanner(message: error!, severity: 'error'),
-              ],
-            ],
-          ),
-        ),
+        if (busy) ...[
+          SizedBox(height: tokens.gap),
+          const SrProgressBar(kind: SrProgressKind.indeterminate),
+        ],
+        if (error != null) ...[
+          SizedBox(height: tokens.gap),
+          SrBanner(message: error!, severity: 'error'),
+        ],
       ],
     );
   }
@@ -527,10 +546,10 @@ class _DatasetPopulatedState extends StatelessWidget {
     required this.datasets,
     required this.detail,
     required this.busy,
-    required this.onAddSource,
-    required this.onRescan,
+    required this.selectedDatasetId,
+    required this.onCreateDataset,
+    required this.onDatasetSelected,
     required this.onExport,
-    required this.onVideo,
     required this.onPreview,
     this.error,
   });
@@ -538,17 +557,22 @@ class _DatasetPopulatedState extends StatelessWidget {
   final List<DatasetSummary> datasets;
   final DatasetDetail? detail;
   final bool busy;
-  final VoidCallback onAddSource;
-  final VoidCallback onRescan;
+  final String? selectedDatasetId;
+  final VoidCallback onCreateDataset;
+  final ValueChanged<String> onDatasetSelected;
   final VoidCallback onExport;
-  final VoidCallback onVideo;
   final ValueChanged<int> onPreview;
   final String? error;
 
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    final dataset = detail?.dataset ?? datasets.first;
+    final selected = selectedDatasetId == null
+        ? null
+        : datasets
+              .where((dataset) => dataset.id == selectedDatasetId)
+              .firstOrNull;
+    final dataset = detail?.dataset ?? selected ?? datasets.first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -557,22 +581,23 @@ class _DatasetPopulatedState extends StatelessWidget {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            SrChip(label: dataset.name, selected: true, icon: Icons.dataset),
+            for (final item in datasets)
+              InputChip(
+                avatar: const Icon(Icons.dataset, size: 14),
+                label: Text(item.name),
+                selected: item.id == dataset.id,
+                onSelected: busy ? null : (_) => onDatasetSelected(item.id),
+              ),
             SrChip(label: 'x${dataset.scale}'),
             SrChip(label: '${dataset.pairCount} pairs', severity: 'success'),
             SrChip(
               label: dataset.usable ? 'Usable' : 'Needs attention',
               severity: dataset.usable ? 'success' : 'warning',
             ),
-            OutlinedButton.icon(
-              onPressed: busy ? null : onAddSource,
+            FilledButton.icon(
+              onPressed: busy ? null : onCreateDataset,
               icon: const Icon(Icons.add),
-              label: const Text('Add source'),
-            ),
-            OutlinedButton.icon(
-              onPressed: busy ? null : onRescan,
-              icon: const Icon(Icons.sync),
-              label: const Text('Re-scan'),
+              label: const Text('Create dataset'),
             ),
             OutlinedButton.icon(
               onPressed: detail?.exportAction.supported == true
@@ -580,11 +605,6 @@ class _DatasetPopulatedState extends StatelessWidget {
                   : null,
               icon: const Icon(Icons.ios_share),
               label: const Text('Export'),
-            ),
-            OutlinedButton.icon(
-              onPressed: busy ? null : onVideo,
-              icon: const Icon(Icons.video_file_outlined),
-              label: const Text('Extract from video'),
             ),
           ],
         ),
@@ -666,6 +686,301 @@ class _OnboardingCard extends StatelessWidget {
   }
 }
 
+class _DatasetChoiceTile extends StatelessWidget {
+  const _DatasetChoiceTile({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(tokens.radius),
+      onTap: onPressed,
+      child: Container(
+        padding: EdgeInsets.all(tokens.gap),
+        decoration: BoxDecoration(
+          border: Border.all(color: tokens.border),
+          borderRadius: BorderRadius.circular(tokens.radius),
+          color: tokens.panel,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 28, color: tokens.accent),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(message, style: TextStyle(color: tokens.muted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PairedDatasetForm extends StatelessWidget {
+  const _PairedDatasetForm({
+    required this.busy,
+    required this.name,
+    required this.path,
+    required this.scale,
+    required this.validationMode,
+    required this.storageOperation,
+    required this.onPickFolder,
+    required this.onScaleChanged,
+    required this.onValidationChanged,
+    required this.onStorageChanged,
+  });
+
+  final bool busy;
+  final TextEditingController name;
+  final TextEditingController path;
+  final int scale;
+  final String validationMode;
+  final String storageOperation;
+  final VoidCallback onPickFolder;
+  final ValueChanged<int> onScaleChanged;
+  final ValueChanged<String> onValidationChanged;
+  final ValueChanged<String> onStorageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SrBanner(
+            title: 'Type 1 dataset',
+            message:
+                'Use a folder containing HR and LR subfolders. Files are matched by filename stem.',
+            severity: 'info',
+          ),
+          SizedBox(height: tokens.compactGap),
+          TextField(
+            controller: name,
+            decoration: const InputDecoration(labelText: 'Dataset name'),
+          ),
+          SizedBox(height: tokens.compactGap),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: path,
+                  decoration: const InputDecoration(
+                    labelText: 'Paired dataset folder',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                tooltip: 'Select dataset folder',
+                onPressed: busy ? null : onPickFolder,
+                icon: const Icon(Icons.folder_open),
+              ),
+            ],
+          ),
+          SizedBox(height: tokens.compactGap),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  isExpanded: true,
+                  initialValue: scale,
+                  decoration: const InputDecoration(labelText: 'Scale'),
+                  items: const [2, 3, 4, 8]
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text('x$value'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: busy
+                      ? null
+                      : (value) => onScaleChanged(value ?? 4),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: validationMode,
+                  decoration: const InputDecoration(labelText: 'Validation'),
+                  items: const [
+                    DropdownMenuItem(value: 'quick', child: Text('Quick')),
+                    DropdownMenuItem(value: 'full', child: Text('Full')),
+                  ],
+                  onChanged: busy
+                      ? null
+                      : (value) => onValidationChanged(value ?? 'quick'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: storageOperation,
+                  decoration: const InputDecoration(labelText: 'Storage'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'reference',
+                      child: Text('Reference external'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'copy',
+                      child: Text('Copy into project'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'move',
+                      child: Text('Move into project'),
+                    ),
+                  ],
+                  onChanged: busy
+                      ? null
+                      : (value) => onStorageChanged(value ?? 'reference'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DatasetCreationProgressDialog extends StatefulWidget {
+  const _DatasetCreationProgressDialog({
+    required this.title,
+    required this.start,
+    required this.getJob,
+    required this.onCompleted,
+  });
+
+  final String title;
+  final Future<JobState> Function() start;
+  final Future<JobState> Function(String jobId) getJob;
+  final Future<void> Function() onCompleted;
+
+  @override
+  State<_DatasetCreationProgressDialog> createState() =>
+      _DatasetCreationProgressDialogState();
+}
+
+class _DatasetCreationProgressDialogState
+    extends State<_DatasetCreationProgressDialog> {
+  String _status = 'Preparing request...';
+  double _progress = 0;
+  bool _running = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _run());
+  }
+
+  Future<void> _run() async {
+    try {
+      var job = await widget.start();
+      while (mounted && !job.isTerminal) {
+        setState(() {
+          _progress = job.progress.clamp(0, 1);
+          _status = job.logs.isEmpty ? 'Working...' : job.logs.last;
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        job = await widget.getJob(job.id);
+      }
+      if (!mounted) return;
+      _progress = job.progress.clamp(0, 1);
+      if (job.status == 'completed') {
+        setState(() {
+          _running = false;
+          _status = 'Dataset created.';
+          _progress = 1;
+        });
+        await widget.onCompleted();
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } else {
+        throw ApiException(
+          job.logs.isEmpty ? 'Dataset creation failed.' : job.logs.last,
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _running = false;
+        _failed = true;
+        _status = error.toString();
+        _progress = 0;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SrBanner(
+              title: _failed
+                  ? 'Creation failed'
+                  : _running
+                  ? 'Working'
+                  : 'Complete',
+              message: _status,
+              severity: _failed
+                  ? 'error'
+                  : _running
+                  ? 'info'
+                  : 'success',
+            ),
+            SizedBox(height: tokens.gap),
+            LinearProgressIndicator(value: _progress.clamp(0, 1)),
+            const SizedBox(height: 8),
+            Text('${(_progress * 100).round()}%'),
+          ],
+        ),
+      ),
+      actions: [
+        if (!_running)
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(_failed ? 'Close' : 'Done'),
+          ),
+      ],
+    );
+  }
+}
+
 class _VideoWizard extends StatelessWidget {
   const _VideoWizard({
     required this.name,
@@ -698,11 +1013,6 @@ class _VideoWizard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SrStepIndicator(
-            steps: ['Source', 'Sampling', 'Filters', 'Review'],
-            currentIndex: 0,
-          ),
-          SizedBox(height: tokens.compactGap),
           TextField(
             controller: name,
             decoration: const InputDecoration(labelText: 'Dataset name'),
@@ -764,45 +1074,23 @@ class _VideoWizard extends StatelessWidget {
             ],
           ),
           SizedBox(height: tokens.compactGap),
-          SrSection(
-            title: 'Review',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          if (value != null && value.exists)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                _KeyValue(
-                  'Source exists',
-                  value?.exists == true ? 'Yes' : 'No',
-                ),
-                _KeyValue(
-                  'Sampling',
-                  value?.samplingStrategy ?? 'Pick a video to estimate.',
-                ),
-                _KeyValue(
-                  'Estimated yield',
-                  value?.estimatedYield == null
-                      ? 'Unavailable'
-                      : '${value!.estimatedYield} pairs',
-                ),
-                _KeyValue(
-                  'Output size',
-                  value?.outputSizeBytes == null
-                      ? 'Unavailable'
-                      : _formatBytes(value!.outputSizeBytes!),
-                ),
-                _KeyValue(
-                  'Deduplication',
-                  value?.deduplicationGuidance ?? 'Pending source metadata.',
-                ),
-                if (value?.readiness != null)
-                  SrBanner(
-                    message: value!.readiness!.message,
-                    severity: value.readiness!.supported
-                        ? 'success'
-                        : 'warning',
-                  ),
+                SrChip(label: value.samplingStrategy, severity: 'success'),
+                if (value.estimatedYield != null)
+                  SrChip(label: '${value.estimatedYield} pairs'),
+                if (value.outputSizeBytes != null)
+                  SrChip(label: _formatBytes(value.outputSizeBytes!)),
               ],
+            )
+          else
+            SrBanner(
+              message: value?.readiness?.message ?? 'Select an existing video.',
+              severity: 'warning',
             ),
-          ),
         ],
       ),
     );
@@ -1064,31 +1352,6 @@ class _HistogramPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _HistogramPainter oldDelegate) =>
       oldDelegate.bins != bins;
-}
-
-class _KeyValue extends StatelessWidget {
-  const _KeyValue(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: srTokens(context).muted),
-            ),
-          ),
-          Flexible(child: Text(value, textAlign: TextAlign.right)),
-        ],
-      ),
-    );
-  }
 }
 
 IconData _sourceIcon(String type) => switch (type) {

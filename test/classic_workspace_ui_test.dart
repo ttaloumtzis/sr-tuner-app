@@ -55,6 +55,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     var openedPath = '';
+    var forgottenPath = '';
     await tester.pumpWidget(
       MaterialApp(
         theme: ClassicTheme.dark(),
@@ -76,6 +77,7 @@ void main() {
             ),
           ],
           onRefreshRecent: () async {},
+          onForgetRecent: (path) async => forgottenPath = path,
           onCreate: (parent, name, {createHere = false}) async {},
           onOpen: (path) async => openedPath = path,
         ),
@@ -101,6 +103,13 @@ void main() {
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pump();
     expect(openedPath, '/tmp/demo');
+
+    await tester.tap(find.byTooltip('Remove from recent projects'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove recent project?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(forgottenPath, '/tmp/demo');
   });
 
   testWidgets(
@@ -182,6 +191,15 @@ void main() {
     expect(find.text('LR / HR preview'), findsOneWidget);
     expect(find.text('Channel histogram'), findsOneWidget);
     expect(find.text('Re-synthesize'), findsOneWidget);
+    expect(find.text('Add source'), findsNothing);
+    expect(find.text('Create dataset'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Create dataset'));
+    await tester.pumpAndSettle();
+    expect(find.text('Type 1 · Paired folders'), findsOneWidget);
+    expect(find.text('Type 2 · Extract from video'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -233,10 +251,10 @@ void main() {
     expect(find.text('Schedule and validation'), findsOneWidget);
     expect(find.text('Optimizer'), findsOneWidget);
     expect(find.text('Loss'), findsOneWidget);
-    expect(find.text('Estimate and checkpoints'), findsOneWidget);
-    expect(find.text('FFT loss'), findsOneWidget);
+    expect(find.text('Setup estimate and launch readiness'), findsOneWidget);
     expect(find.text('Clone settings'), findsOneWidget);
     expect(find.text('Resume training'), findsOneWidget);
+    expect(find.text('Delete config'), findsOneWidget);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -260,13 +278,90 @@ void main() {
     expect(find.text('Validation samples'), findsOneWidget);
     expect(find.text('Recent events'), findsOneWidget);
   });
+
+  testWidgets('training runs can be deleted from the run list', (tester) async {
+    tester.view.physicalSize = const Size(1900, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final client = _FakeBackendClient();
+    var changed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClassicTheme.dark(),
+        home: Scaffold(
+          body: TrainingTab(
+            client: client,
+            project: _projectWithWorkflow(),
+            onProjectChanged: (_) => changed = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Delete config'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete config'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete run_x4?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    expect(client.deletedRuns, 1);
+    expect(changed, isTrue);
+  });
+
+  testWidgets(
+    'training setup can be saved when launch dependencies are missing',
+    (tester) async {
+      tester.view.physicalSize = const Size(1900, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final client = _FakeBackendClient(trainingReady: false);
+      var changed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ClassicTheme.dark(),
+          home: Scaffold(
+            body: TrainingTab(
+              client: client,
+              project: _projectWithWorkflow(),
+              onProjectChanged: (_) => changed = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Launch readiness'), findsOneWidget);
+      expect(find.text('Launch blocked'), findsOneWidget);
+      expect(find.text('Create configured run'), findsOneWidget);
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Create configured run'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(client.createdRuns, 1);
+      expect(changed, isTrue);
+    },
+  );
 }
 
 class _FakeBackendClient extends BackendClient {
-  _FakeBackendClient({this.liveRun = false});
+  _FakeBackendClient({this.liveRun = false, this.trainingReady = true});
 
   final bool liveRun;
+  final bool trainingReady;
   int selectedTab = 0;
+  int createdRuns = 0;
+  int deletedRuns = 0;
 
   @override
   Future<DashboardSummary> dashboardSummary(String projectId) async {
@@ -461,16 +556,67 @@ class _FakeBackendClient extends BackendClient {
     bool tensorboard = false,
   }) async {
     return TrainingReadiness(
-      available: true,
-      message: 'Training dependencies are ready.',
+      available: trainingReady,
+      message: trainingReady
+          ? 'Training dependencies are ready.'
+          : 'Required training dependencies are missing.',
       dependencies: [
         DependencySummary(
           name: 'torch',
-          available: true,
+          available: trainingReady,
           required: true,
-          message: 'Ready',
+          message: trainingReady ? 'Ready' : 'Missing',
+        ),
+        DependencySummary(
+          name: 'tensorboard',
+          available: false,
+          required: tensorboard,
+          message: 'Optional logging dependency is missing.',
         ),
       ],
+    );
+  }
+
+  @override
+  Future<ProjectEnvelope> createRun({
+    required String projectId,
+    required String name,
+    required String datasetId,
+    required String modelId,
+    required String trainMode,
+    required String device,
+    required int epochs,
+    required int checkpointCadence,
+    required double validationPercentage,
+    required int validationSeed,
+    required bool validationShuffle,
+    required bool tensorboard,
+    required String precision,
+    required bool compile,
+    required int warmupEpochs,
+    required String schedulerType,
+    required String diffMode,
+  }) async {
+    createdRuns += 1;
+    return ProjectEnvelope(
+      projectId: projectId,
+      rootPath: '/tmp/demo',
+      projectFile: '/tmp/demo/sr-tuner.project.json',
+      project: _projectWithWorkflow(),
+    );
+  }
+
+  @override
+  Future<ProjectEnvelope> deleteRunConfig({
+    required String projectId,
+    required String runId,
+  }) async {
+    deletedRuns += 1;
+    return ProjectEnvelope(
+      projectId: projectId,
+      rootPath: '/tmp/demo',
+      projectFile: '/tmp/demo/sr-tuner.project.json',
+      project: _projectWithWorkflow(),
     );
   }
 
@@ -507,23 +653,10 @@ class _FakeBackendClient extends BackendClient {
       iterationsPerEpoch: 120,
       vramPeakBytes: 2147483648,
       diskPerCheckpointBytes: 10485760,
-      unsupportedLosses: [
-        UnsupportedState(
-          supported: false,
-          reason: 'unsupported',
-          code: 'fft_loss',
-          message: 'FFT loss is not supported by this backend path.',
-          actionLabel: 'FFT loss',
-        ),
-      ],
+      unsupportedLosses: const [],
       suggestedFixes: const [],
       retention: const {'keep_best': true},
-      ema: UnsupportedState(
-        supported: false,
-        reason: 'unsupported',
-        code: 'ema_unavailable',
-        message: 'EMA checkpoints are unavailable.',
-      ),
+      ema: null,
     );
   }
 
@@ -637,6 +770,145 @@ class _FakeBackendClient extends BackendClient {
       rootPath: '/tmp/demo',
       projectFile: '/tmp/demo/sr-tuner.project.json',
     );
+  }
+
+  @override
+  Future<CheckpointAggregate> checkpointAggregate(String projectId) async {
+    return CheckpointAggregate(
+      checkpoints: [
+        CheckpointSummary(
+          id: 'ckpt_1',
+          runId: 'run_1',
+          epoch: 42,
+          iteration: 4200,
+          path: '/tmp/demo/checkpoints/ckpt-ep42.pt',
+          sizeBytes: 67000000,
+          savedAt: '2024-01-01T12:42:00Z',
+          metrics: const {
+            'val_psnr': 28.94,
+            'val_ssim': 0.871,
+            'val_lpips': 0.092,
+          },
+          tags: const ['best_psnr', 'manual'],
+          deleted: false,
+          modelArchitecture: 'internal_residual_pixelshuffle',
+          scale: 4,
+        ),
+        CheckpointSummary(
+          id: 'ckpt_2',
+          runId: 'run_1',
+          epoch: 40,
+          iteration: 4000,
+          path: '/tmp/demo/checkpoints/ckpt-ep40.pt',
+          sizeBytes: 67000000,
+          savedAt: '2024-01-01T11:20:00Z',
+          metrics: const {
+            'val_psnr': 28.82,
+            'val_ssim': 0.868,
+            'val_lpips': 0.094,
+          },
+          tags: const [],
+          deleted: false,
+          modelArchitecture: 'internal_residual_pixelshuffle',
+          scale: 4,
+        ),
+      ],
+      bestCheckpoint: CheckpointSummary(
+        id: 'ckpt_1',
+        runId: 'run_1',
+        epoch: 42,
+        iteration: 4200,
+        path: '/tmp/demo/checkpoints/ckpt-ep42.pt',
+        sizeBytes: 67000000,
+        savedAt: '2024-01-01T12:42:00Z',
+        metrics: const {
+          'val_psnr': 28.94,
+          'val_ssim': 0.871,
+          'val_lpips': 0.092,
+        },
+        tags: const ['best_psnr', 'manual'],
+        deleted: false,
+        modelArchitecture: 'internal_residual_pixelshuffle',
+        scale: 4,
+      ),
+      psnrDelta: 4.89,
+      actions: {
+        'export_best': ActionState(
+          id: 'export_best',
+          label: 'Export best',
+          supported: true,
+        ),
+        'continue_from_best': ActionState(
+          id: 'continue',
+          label: 'Continue from best',
+          supported: true,
+        ),
+        'prune': ActionState(id: 'prune', label: 'Prune', supported: true),
+      },
+    );
+  }
+
+  @override
+  Future<InferenceReadiness> inferenceReadiness({String device = 'cpu'}) async {
+    return InferenceReadiness(
+      available: true,
+      message: 'Inference dependencies are ready.',
+      dependencies: const [],
+    );
+  }
+
+  @override
+  Future<InferenceInspector> inferenceInspector(String projectId) async {
+    return InferenceInspector(
+      blockedChecklist: const [],
+      inspector: const {
+        'bit_depth': 16,
+        'psnr_gain': 5.2,
+        'sharpness_gain': 0.38,
+        'runtime_seconds': 2.4,
+        'width': 1920,
+        'height': 1280,
+      },
+      recent: const [],
+      addTileAction: ActionState(
+        id: 'add_tile',
+        label: 'Add tile',
+        supported: true,
+      ),
+      batchDropZone: ActionState(
+        id: 'batch_drop',
+        label: 'Batch drop',
+        supported: true,
+      ),
+      tuning: {
+        'denoise_strength': UnsupportedState(
+          supported: true,
+          reason: '',
+          code: '',
+          message: '',
+        ),
+        'detail_boost': UnsupportedState(
+          supported: true,
+          reason: '',
+          code: '',
+          message: '',
+        ),
+        'color_preserve': UnsupportedState(
+          supported: true,
+          reason: '',
+          code: '',
+          message: '',
+        ),
+      },
+      compareView: const {},
+    );
+  }
+
+  @override
+  Future<InferenceHistoryEnvelope> listInferenceHistory(
+    String projectId,
+  ) async {
+    return InferenceHistoryEnvelope(records: const []);
   }
 }
 

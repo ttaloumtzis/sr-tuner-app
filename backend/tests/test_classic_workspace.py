@@ -127,6 +127,14 @@ def test_workspace_preferences_and_recent_projects(tmp_path, monkeypatch) -> Non
     stale = client.get("/projects/recent")
     assert stale.json()["projects"][0]["status"] == "missing"
 
+    removed = client.delete(
+        "/projects/recent",
+        params={"path": str(missing_root)},
+        headers=auth_headers(),
+    )
+    assert removed.status_code == 200
+    assert removed.json()["projects"] == []
+
 
 def test_dashboard_activity_guidance_and_status(tmp_path, monkeypatch) -> None:
     project_id, root = _make_project(tmp_path, monkeypatch)
@@ -183,8 +191,10 @@ def test_backend_domain_view_endpoints_return_supported_or_unavailable_states(tm
 
     templates = client.get(f"/projects/{project_id}/model-templates")
     assert templates.status_code == 200
-    assert templates.json()["templates"][0]["support_state"] == "supported"
-    assert any(template["unavailable"] for template in templates.json()["templates"][1:])
+    template_rows = templates.json()["templates"]
+    assert template_rows
+    assert all(template["support_state"] == "supported" for template in template_rows)
+    assert all(not template["unavailable"] for template in template_rows)
 
     estimate = client.post(
         f"/projects/{project_id}/training/estimate",
@@ -210,7 +220,7 @@ def test_backend_domain_view_endpoints_return_supported_or_unavailable_states(tm
     )
     assert estimate.status_code == 200
     assert estimate.json()["low_pair_guard"]["code"] == "low_pair_count"
-    assert estimate.json()["ema"]["supported"] is False
+    assert estimate.json()["unsupported_losses"] == []
 
     live = client.get(f"/projects/{project_id}/live/detail")
     assert live.status_code == 200

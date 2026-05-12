@@ -59,6 +59,31 @@ def test_health_and_version() -> None:
     assert version.json()["app"] == "sr-tuner"
 
 
+def test_shutdown_requires_session_token(monkeypatch) -> None:
+    monkeypatch.setenv("SR_TUNER_SESSION_TOKEN", TOKEN)
+
+    response = client.post("/shutdown")
+
+    assert response.status_code == 401
+
+
+def test_shutdown_schedules_backend_termination(monkeypatch) -> None:
+    called = False
+
+    def fake_terminate_process() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setenv("SR_TUNER_SESSION_TOKEN", TOKEN)
+    monkeypatch.setattr("sr_tuner_api.main._terminate_process", fake_terminate_process)
+
+    response = client.post("/shutdown", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "shutting_down"
+    assert called is True
+
+
 def test_create_and_open_project(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SR_TUNER_SESSION_TOKEN", TOKEN)
     created = client.post(
@@ -312,6 +337,32 @@ def test_create_run_persists_id_named_folder_and_split(tmp_path, monkeypatch) ->
     assert run["name"] == "Editable Display Name"
     assert run["train_indexes"] == [0]
     assert run["validation_indexes"] == []
+
+
+def test_delete_run_config_removes_run_and_folder(tmp_path, monkeypatch) -> None:
+    project_id, project_root, dataset, model = make_dataset_and_model(tmp_path, monkeypatch)
+
+    created = client.post(
+        f"/projects/{project_id}/runs",
+        json={
+            "name": "remove_me",
+            "dataset_id": dataset["id"],
+            "model_id": model["id"],
+        },
+        headers=auth_headers(),
+    )
+    run = created.json()["project"]["runs"][0]
+    run_folder = project_root / "runs" / run["id"]
+    assert run_folder.is_dir()
+
+    deleted = client.delete(
+        f"/projects/{project_id}/runs/{run['id']}",
+        headers=auth_headers(),
+    )
+
+    assert deleted.status_code == 200
+    assert deleted.json()["project"]["runs"] == []
+    assert not run_folder.exists()
 
 
 def test_tensorboard_dependency_blocks_when_enabled(tmp_path, monkeypatch) -> None:

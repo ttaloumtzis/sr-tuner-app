@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import random
+import shutil
 from pathlib import Path
 from typing import Any, Literal
 
@@ -328,6 +329,22 @@ def resume_run(project_root: Path, run_id: str, request: ResumeRunRequest) -> tu
     return write_project(_replace_run(project, run)), run, job
 
 
+def delete_run_config(project_root: Path, run_id: str) -> tuple[ProjectState, RunObject]:
+    project = open_project(project_root)
+    run = _find_run(project, run_id)
+    if run.state in ACTIVE_RUN_STATES:
+        raise ApiError(409, "run_is_active", "An active run cannot be deleted.", details={"state": run.state})
+
+    run_folder = _resolve_run_folder(project_root, run)
+    if run_folder.is_dir():
+        shutil.rmtree(run_folder)
+    elif run_folder.exists():
+        run_folder.unlink()
+
+    project.runs = [raw for raw in project.runs if raw.get("id") != run_id]
+    return write_project(project), run
+
+
 def stop_run(project_root: Path, run_id: str, job: Job | None = None) -> tuple[ProjectState, RunObject]:
     project = open_project(project_root)
     run = _find_run(project, run_id)
@@ -397,19 +414,26 @@ def training_readiness(*, include_tensorboard: bool = False) -> TrainingReadines
 
 def available_devices() -> DeviceListResponse:
     devices = [DeviceInfo(id="cpu", label="CPU", type="cpu")]
+    default_device = "cpu"
     if _module_available("torch"):
         try:
             import torch
 
             if torch.cuda.is_available():
+                backend = "ROCm" if getattr(torch.version, "hip", None) else "CUDA"
                 for index in range(torch.cuda.device_count()):
                     name = torch.cuda.get_device_name(index)
-                    devices.append(DeviceInfo(id=f"cuda:{index}", label=f"CUDA {index}: {name}", type="cuda"))
+                    device_id = f"cuda:{index}"
+                    devices.append(DeviceInfo(id=device_id, label=f"{backend} {index}: {name}", type="cuda"))
+                    if default_device == "cpu":
+                        default_device = device_id
             if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 devices.append(DeviceInfo(id="mps", label="Apple Metal", type="mps"))
+                if default_device == "cpu":
+                    default_device = "mps"
         except Exception:
-            return DeviceListResponse(devices=devices)
-    return DeviceListResponse(devices=devices)
+            return DeviceListResponse(default_device=default_device, devices=devices)
+    return DeviceListResponse(default_device=default_device, devices=devices)
 
 
 def build_internal_sr_model(scale: int, num_features: int, num_blocks: int):
@@ -580,6 +604,13 @@ def _find_model(project: ProjectState, model_id: str) -> ModelObject:
         if raw.get("id") == model_id:
             return ModelObject.model_validate(raw)
     raise ApiError(404, "model_not_found", "Model was not found.", details={"model_id": model_id})
+
+
+def _resolve_run_folder(project_root: Path, run: RunObject) -> Path:
+    folder = Path(run.folder)
+    if folder.is_absolute():
+        return folder.resolve()
+    return (project_root / folder).resolve()
 
 
 def _module_available(name: str) -> bool:
