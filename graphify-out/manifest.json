@@ -40,16 +40,16 @@
     "hash": "105c0bf2e53f187c129e371b987b16d0"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/backend_client.dart": {
-    "mtime": 1778580006.2626045,
-    "hash": "4b6d3c095bbedfae862a4acc1994da8b"
+    "mtime": 1778585450.6964757,
+    "hash": "af6a5ef57e5831fa6179ff23fbfa9049"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/classic_theme.dart": {
     "mtime": 1778518059.2656384,
     "hash": "7ce724aaa3d9148088e9d9e88d5dd31d"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/classic_components.dart": {
-    "mtime": 1778518072.336716,
-    "hash": "51676552a48a9882af92c232ba3dd827"
+    "mtime": 1778585085.5250218,
+    "hash": "550ec4db363f3b8b5b16ef09acf8a83d"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/startup_screen.dart": {
     "mtime": 1778577531.693507,
@@ -80,12 +80,12 @@
     "hash": "6e91446f3c44514fd0ae241d4ad9584c"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/workspace/training_tab.dart": {
-    "mtime": 1778579063.9459102,
-    "hash": "074ce676b1c0c35b78d835a6214cddf4"
+    "mtime": 1778585469.3613973,
+    "hash": "e6a71ce93205130fe6273697adf0b9f4"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/workspace/live_metrics_tab.dart": {
-    "mtime": 1778519229.744266,
-    "hash": "d0b2b728b373bc72c4a082081ed46d8d"
+    "mtime": 1778584732.8915465,
+    "hash": "d4bc761facbeb1fb2f726a941fb779f9"
   },
   "/home/theodoros/Documents/sr-tuner/lib/src/design_system/sr_chip.dart": {
     "mtime": 1778519592.1852627,
@@ -111,6 +111,110 @@
     "mtime": 1778491125.7134116,
     "hash": "399ad1d69aa4ba27ae90eb088bbc155c"
   },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_application.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "5774eb642609ea54649f5a74272b973f"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_basic_message_channel.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "8730d7034562b44bcab7c48c894ba862"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_binary_codec.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "5997440e26e079541337c498925226f1"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_binary_messenger.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "5b259053180f6c3a637a3760f5e78921"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_dart_project.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "1ddbe3c8a2821804ced450e37fa9701a"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_engine.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "1b028c1fa72fa880b3f8ceb15c1c69df"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_event_channel.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "f3234aba146e57eced1b9febac78a1ec"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_json_message_codec.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "4f7385406239c0eb8b31855e75b9addc"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_json_method_codec.h": {
+    "mtime": 1778586102.7322392,
+    "hash": "c31254629784a8fd48a5ec671df85e64"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_message_codec.h": {
+    "mtime": 1778586102.733244,
+    "hash": "4e0c2c7002baf140a95f0067b781d498"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_method_call.h": {
+    "mtime": 1778586102.733244,
+    "hash": "1187bb4f46363e874137ce4f71356e8b"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_method_channel.h": {
+    "mtime": 1778586102.733244,
+    "hash": "de7b99c808de5c710ade00638cf7e484"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_method_codec.h": {
+    "mtime": 1778586102.733244,
+    "hash": "1593085ded6e4a14d8129a5d9a95edb8"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_method_response.h": {
+    "mtime": 1778586102.733244,
+    "hash": "3373ee1d610372294796ae24f7b10b59"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_pixel_buffer_texture.h": {
+    "mtime": 1778586102.733244,
+    "hash": "613a2389f2fda4d844e82e63b690a975"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_plugin_registrar.h": {
+    "mtime": 1778586102.733244,
+    "hash": "3d850b5432140f7e565baa806ee1f716"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_plugin_registry.h": {
+    "mtime": 1778586102.733244,
+    "hash": "9093dc992b7f0c62c899bb5ee75437bb"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_standard_message_codec.h": {
+    "mtime": 1778586102.733244,
+    "hash": "cde1b5d81be59769b872be4d62b4bae8"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_standard_method_codec.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "09d4ac26822e07f1c2f16d89380b40dc"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_string_codec.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "5edcd4ae8b7d3acb2e56bf8bfad75d4d"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_texture.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "d1894650bbfe9ba65c6f0b195645a9a5"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_texture_gl.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "3a535810e25ecd4fd017a2eb197dab30"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_texture_registrar.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "455c45888f33294a5054d8adacac5a2e"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_value.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "0fad916a7405474cce0f6d85509a12ac"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/fl_view.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "e27fc7ec7888b59ffac04a45e4461699"
+  },
+  "/home/theodoros/Documents/sr-tuner/linux/flutter/ephemeral/flutter_linux/flutter_linux.h": {
+    "mtime": 1778586102.7342486,
+    "hash": "1dcce1af8eb3052e29d06a756f0535db"
+  },
   "/home/theodoros/Documents/sr-tuner/linux/runner/main.cc": {
     "mtime": 1778488688.3087368,
     "hash": "0643b8609698e96b3abd63c210361a87"
@@ -132,8 +236,8 @@
     "hash": "a47ebbfefc60fa2f3cb919764ef7ac42"
   },
   "/home/theodoros/Documents/sr-tuner/test/classic_workspace_ui_test.dart": {
-    "mtime": 1778578866.7036748,
-    "hash": "3aa26496b72a7d64e5e509eff3a3044a"
+    "mtime": 1778585487.810915,
+    "hash": "a2fc2fcada13105e7c87ded1a62fac86"
   },
   "/home/theodoros/Documents/sr-tuner/scripts/gen_fixtures.py": {
     "mtime": 1778496198.6032047,
@@ -188,12 +292,12 @@
     "hash": "d59ebf1cb034df520763e05dd3a0bac4"
   },
   "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/main.py": {
-    "mtime": 1778583886.1035895,
-    "hash": "45f7453f4c73120255d7f3f58e499a78"
+    "mtime": 1778585846.9028163,
+    "hash": "884e59fd384a0a9cc02dc88400632f4c"
   },
   "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/runs.py": {
-    "mtime": 1778578789.084565,
-    "hash": "82429d001ecf3ed6daf298f4bd8eab2d"
+    "mtime": 1778585520.820181,
+    "hash": "c0677b7c83d72acb7ee5efa143288ab7"
   },
   "/home/theodoros/Documents/sr-tuner/backend/src/sr_tuner_api/inference.py": {
     "mtime": 1778496315.8307955,
@@ -208,8 +312,8 @@
     "hash": "6e52a0bf9635a85807afbb1609801c48"
   },
   "/home/theodoros/Documents/sr-tuner/backend/tests/test_projects.py": {
-    "mtime": 1778580057.4636326,
-    "hash": "ead1fe64467766db07e82f55f88c258c"
+    "mtime": 1778585479.7373536,
+    "hash": "a89d90f42bc453d9ba55d8d94f573cea"
   },
   "/home/theodoros/Documents/sr-tuner/backend/tests/test_checkpoints.py": {
     "mtime": 1778495124.1751552,
@@ -390,6 +494,22 @@
   "/home/theodoros/Documents/sr-tuner/openspec/changes/archive/2026-05-11-port-design-handoff-flutter-ui/specs/inference-workflow/spec.md": {
     "mtime": 1778515986.2058551,
     "hash": "d7a836a3785b5b658cedd65781d496e3"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/improve-live-metrics-visibility/proposal.md": {
+    "mtime": 1778586851.2732308,
+    "hash": "3e58c1db1858dbb6a3d518874abae6c3"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/improve-live-metrics-visibility/design.md": {
+    "mtime": 1778586869.0068347,
+    "hash": "a395102f9da0964c5a4b513b0f88df3b"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/improve-live-metrics-visibility/tasks.md": {
+    "mtime": 1778586904.6621284,
+    "hash": "bf7cdd7c7b99e5264700ac8a931deb17"
+  },
+  "/home/theodoros/Documents/sr-tuner/openspec/changes/improve-live-metrics-visibility/specs/live-metrics-visibility/spec.md": {
+    "mtime": 1778586891.8976545,
+    "hash": "9458dce44333daadcde1d44e16967a9c"
   },
   "/home/theodoros/Documents/sr-tuner/linux/CMakeLists.txt": {
     "mtime": 1778488688.307508,
