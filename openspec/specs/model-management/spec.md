@@ -4,7 +4,7 @@ Define how sr-tuner creates, configures, validates, and derives status for proje
 ## Requirements
 
 ### Requirement: Model objects
-The system SHALL allow users to create model objects with stable IDs, names, architecture, scale, number of features, number of blocks, optimizer settings, scheduler settings, loss weights, status, and metadata.
+The system SHALL allow users to create model objects with stable IDs, names, architecture, number of features, number of blocks, optimizer settings, scheduler settings, loss weights, status, trained_core_weights_path, and metadata. Scale SHALL NOT be stored in model configuration for new models; scale is derived from dataset at run time.
 
 #### Scenario: Model is created
 - **WHEN** the user completes the Create Model form
@@ -74,3 +74,57 @@ The system SHALL compare selected dataset scale and model scale before training 
 #### Scenario: Scale mismatch occurs
 - **WHEN** the user selects a dataset and model with different scale values
 - **THEN** Training Setup blocks launch and explains the mismatch
+
+## MODIFIED Requirements
+
+### Requirement: Model objects
+The system SHALL allow users to create model objects with stable IDs, names, architecture, number of features, number of blocks, optimizer settings, scheduler settings, loss weights, status, trained_core_weights_path, and metadata. Scale SHALL NOT be stored in model configuration for new models; scale is derived from dataset at run time.
+
+#### Scenario: New model is created
+- **WHEN** the user creates a new model from a template
+- **THEN** the model does not include a scale field; scale comes from dataset at training time
+
+#### Scenario: Legacy model exists
+- **WHEN** an existing model has scale stored in configuration (pre-change format)
+- **THEN** the backend maintains backward compatibility and uses the stored scale
+
+### Requirement: Editable training-related model config
+The system SHALL allow optimizer, scheduler, and L1, perceptual, and adversarial loss weights to be edited on model objects before training or fine-tuning. Editing of num_features and num_blocks SHALL be blocked for trained models (models with trained_core_weights_path).
+
+#### Scenario: User edits untrained model config
+- **WHEN** the user changes num_features or num_blocks on an untrained model
+- **THEN** the changes are saved and model remains untrained
+
+#### Scenario: User edits trained model config
+- **WHEN** the user attempts to change num_features or num_blocks on a trained model
+- **THEN** the UI blocks the edit and shows a message that core architecture is locked after training
+
+#### Scenario: User edits trained model optimizer
+- **WHEN** the user changes optimizer or loss weights on a trained model
+- **THEN** the changes are saved; this is allowed for fine-tuning preparation
+
+### Requirement: Trained and fine-tune models
+The system SHALL track whether a model is untrained or trained based on the presence of trained_core_weights_path. A trained model SHALL be usable for inference and fine-tuning.
+
+#### Scenario: Model completes first training
+- **WHEN** a run completes with a best checkpoint and core weights are extracted
+- **THEN** the model's trained_core_weights_path is populated and status is "trained"
+
+#### Scenario: Trained model is used for inference
+- **WHEN** inference is requested with a trained model
+- **THEN** core weights are loaded and scale-agnostic inference proceeds with user-specified output scale
+
+#### Scenario: Trained model is used for fine-tuning
+- **WHEN** a run is created using a trained model
+- **THEN** core weights are loaded as starting point and new input/output layers are constructed for the dataset's scale
+
+### Requirement: Dataset model scale compatibility
+The system SHALL derive model scale from the selected dataset, not from the model configuration. For legacy models with stored scale, the dataset scale must still match the model's stored scale.
+
+#### Scenario: New model with dataset
+- **WHEN** a user creates a run with a new model (no scale field)
+- **THEN** the dataset scale is automatically used for that run
+
+#### Scenario: Legacy model with dataset
+- **WHEN** a user creates a run with a legacy model (has scale in config)
+- **THEN** the dataset scale must match the model's stored scale (backward compatible check)

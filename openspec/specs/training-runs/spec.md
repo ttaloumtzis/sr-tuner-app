@@ -137,3 +137,20 @@ The system SHALL distinguish live-process pause/resume, interrupted run resume, 
 #### Scenario: User fine-tunes a model
 - **WHEN** the user starts fine-tuning from a checkpoint
 - **THEN** the backend creates a new run linked to the source checkpoint rather than overwriting the source run
+
+## MODIFIED Requirements
+
+### Requirement: Run setup
+The system SHALL allow users to configure a training run with run name, selected dataset, selected model or fine-tune source, output folder, device, epochs, checkpoint cadence, validation split, logging, mixed precision, compile toggle, warmup, and scheduler-specific options. Scale SHALL be derived from the selected dataset, not from the model configuration.
+
+#### Scenario: User configures run with dataset
+- **WHEN** the user selects a dataset in Training Setup
+- **THEN** the backend derives the run's output scale from the dataset's validated scale
+
+#### Scenario: Run with trained model
+- **WHEN** the user creates a run using a trained model (with core weights)
+- **THEN** the backend loads core weights from the model's trained_core_weights_path and constructs new input/output layers with the dataset's scale
+
+#### Scenario: Fine-tuning from trained model
+- **WHEN** fine-tuning uses a trained model on a dataset with different scale
+- **THEN** the backend loads core weights and builds input/output layers for the new scale

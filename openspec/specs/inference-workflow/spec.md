@@ -4,25 +4,33 @@ Define how sr-tuner runs checkpoint-based single-image and batch super-resolutio
 ## Requirements
 
 ### Requirement: Single image inference
-The system SHALL allow users to run inference on a single image using a selected model checkpoint.
+The system SHALL allow users to run inference on a single image using a selected trained model.
 
 #### Scenario: Single image is processed
-- **WHEN** the user selects an image, checkpoint, output settings, and starts inference
-- **THEN** the backend writes the SR output and records inference metadata
+- **WHEN** the user selects an image, trained model, output scale, output settings, and starts inference
+- **THEN** the backend loads core weights from the model, constructs input/output layers for the selected scale, writes the SR output, and records inference metadata
 
 ### Requirement: Batch inference
-The system SHALL allow users to run inference on a folder of images using a selected model checkpoint.
+The system SHALL allow users to run inference on a folder of images using a selected trained model.
 
 #### Scenario: Batch folder is processed
 - **WHEN** the user selects a folder and starts batch inference
 - **THEN** the backend writes outputs for supported images and records batch inference metadata
 
-### Requirement: Checkpoint-derived scale
-The system SHALL derive inference scale from the selected model checkpoint instead of allowing arbitrary incompatible scale changes.
+### Requirement: Trained model-based inference
+The system SHALL use trained models (with core weights) for inference instead of individual checkpoints. The user SHALL specify the output scale at inference time.
 
-#### Scenario: Checkpoint is selected
-- **WHEN** the user selects a checkpoint
-- **THEN** the Inference tab displays the checkpoint scale and uses it for inference
+#### Scenario: Trained model is selected
+- **WHEN** the user selects a trained model in Inference
+- **THEN** the UI displays the model's core architecture (num_features, num_blocks) and allows output scale selection
+
+#### Scenario: User specifies output scale
+- **WHEN** the user sets output scale for inference
+- **THEN** the backend constructs output layer with the specified scale using the model's core weights
+
+#### Scenario: No trained models available
+- **WHEN** the project has no trained models (no trained_core_weights_path)
+- **THEN** Inference tab shows a message that no trained models are available and directs user to train first
 
 ### Requirement: Inference dependency availability
 The system SHALL detect required inference dependencies and selected device support before launching inference jobs.
@@ -50,7 +58,7 @@ The system SHALL support tiled inference settings for large images and SHALL rec
 - **THEN** the backend returns a recoverable error suggesting smaller tile size, CPU fallback, or lower concurrency
 
 ### Requirement: Inference history
-The system SHALL store inference history objects with input path, output path, checkpoint, scale, tile settings, device, runtime, and available metrics.
+The system SHALL store inference history objects with input path, output path, model_id, output_scale, tile settings, device, runtime, and available metrics.
 
 #### Scenario: User reopens project
 - **WHEN** a project with inference history is opened
