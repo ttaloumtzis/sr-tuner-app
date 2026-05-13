@@ -412,6 +412,19 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
             job.logs = [*job.logs[-49:], f"Epoch {epoch}/{run.settings.epochs} complete."]
             job_store.put(job)
 
+            metric_values = {
+                "train_loss_total": train_loss,
+                "learning_rate": float(optimizer.param_groups[0]["lr"]),
+                "progress": progress,
+                "epoch_progress": 1.0,
+                "epoch_iteration": float(validation_iterations if should_validate else train_count),
+                "epoch_total_iterations": float(validation_iterations if should_validate else iterations_per_epoch),
+                "total_iterations": float(total_iterations),
+                "iterations_per_second": iterations_per_second,
+            }
+            if should_validate:
+                metric_values["val_psnr"] = val_psnr
+                metric_values["val_ssim"] = val_ssim
             write_metric_record(
                 project_root,
                 run,
@@ -419,18 +432,7 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                     step=epoch,
                     epoch=epoch,
                     iteration=epoch * max(train_count, 1),
-                    values={
-                        "train_loss_total": train_loss,
-                        "val_psnr": val_psnr,
-                        "val_ssim": val_ssim,
-                        "learning_rate": optimizer.param_groups[0]["lr"],
-                        "progress": progress,
-                        "epoch_progress": 1.0,
-                        "epoch_iteration": float(validation_iterations if should_validate else train_count),
-                        "epoch_total_iterations": float(validation_iterations if should_validate else iterations_per_epoch),
-                        "total_iterations": float(total_iterations),
-                        "iterations_per_second": iterations_per_second,
-                    },
+                    values=metric_values,
                     components={**train_components, "val_loss": val_loss},
                 ),
             )
