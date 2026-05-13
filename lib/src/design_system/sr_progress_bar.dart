@@ -19,7 +19,7 @@ class SrProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
+
     if (type == SrProgressType.indeterminate) {
       return SizedBox(
         height: height,
@@ -49,23 +49,11 @@ class SrProgressBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: tokens.accent,
                 borderRadius: BorderRadius.circular(height / 2),
-                gradient: type == SrProgressType.striped
-                    ? _stripedGradient(tokens.accent)
-                    : null,
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  LinearGradient _stripedGradient(Color color) {
-    return LinearGradient(
-      colors: [color, color.withValues(alpha: 0.8)],
-      stops: const [0.0, 0.5, 0.5, 1.0],
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
     );
   }
 }

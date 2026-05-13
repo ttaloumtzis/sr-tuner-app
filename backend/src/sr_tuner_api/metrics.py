@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import re
+import shutil
 import struct
+import subprocess
 import zlib
 from pathlib import Path
 from typing import Any, Literal
@@ -55,6 +59,7 @@ class ActiveRunStatus(BaseModel):
     epoch: int = 0
     iteration: int = 0
     progress: float = 0.0
+    phase: str = "idle"
     latest_metrics: dict[str, float] = Field(default_factory=dict)
 
 
@@ -62,6 +67,7 @@ class LiveStatusSnapshot(BaseModel):
     epoch: int
     iteration: int
     progress: float
+    phase: str = "training"
     latest_metrics: dict[str, float] = Field(default_factory=dict)
 
 
@@ -163,11 +169,13 @@ def set_live_status(
     iteration: int,
     progress: float,
     latest_metrics: dict[str, float],
+    phase: str = "training",
 ) -> None:
     _LIVE_STATUS[_live_status_key(project_root, run_id)] = LiveStatusSnapshot(
         epoch=epoch,
         iteration=iteration,
         progress=progress,
+        phase=phase,
         latest_metrics=latest_metrics,
     )
 
@@ -183,27 +191,9 @@ def initialize_run_metrics(project_root: Path, run: RunObject) -> RunObject:
     definitions = {key: value.model_dump() for key, value in DEFAULT_METRIC_DEFINITIONS.items()}
     definitions_path.write_text(json.dumps(definitions, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     run.metadata["metric_definitions_path"] = store_asset_path(project_root, definitions_path).stored
-    run.metadata["metrics_path"] = store_asset_path(project_root, _metrics_path(project_root, run)).stored
-    write_metric_record(
-        project_root,
-        run,
-        MetricRecord(
-            step=0,
-            epoch=0,
-            iteration=0,
-            values={
-                "train_loss_total": 0.0,
-                "val_psnr": 0.0,
-                "val_ssim": 0.0,
-                "learning_rate": 0.0,
-                "progress": 0.0,
-                "iterations_per_second": 0.0,
-            },
-            components={"l1": 0.0},
-        ),
-    )
-    preview = generate_validation_preview(project_root, run)
-    run.metadata["latest_preview"] = preview.model_dump()
+    metrics_path = _metrics_path(project_root, run)
+    metrics_path.touch()
+    run.metadata["metrics_path"] = store_asset_path(project_root, metrics_path).stored
     run.metadata["telemetry"] = hardware_telemetry(run).model_dump()
     project = open_project(project_root)
     for index, raw in enumerate(project.runs):
@@ -249,6 +239,7 @@ def active_run_status(project_root: Path) -> ActiveRunStatus:
         epoch=live.epoch if live else (latest.epoch if latest else 0),
         iteration=live.iteration if live else (latest.iteration if latest else 0),
         progress=live.progress if live else (latest.values.get("progress", 0.0) if latest else 0.0),
+        phase=live.phase if live else "idle",
         latest_metrics=live.latest_metrics if live else (latest.values if latest else {}),
     )
 
@@ -263,6 +254,8 @@ def hardware_telemetry(run: RunObject | None = None) -> HardwareTelemetry:
     temperature = _unavailable("Temperature telemetry is not available for this device.")
     if device.startswith("cuda"):
         memory_used, memory_total, utilization, temperature = _cuda_telemetry(device)
+    elif device == "cpu":
+        memory_used, memory_total, utilization, temperature = _cpu_telemetry()
     return HardwareTelemetry(
         device=device,
         device_type=device_type,
@@ -303,12 +296,164 @@ def _cuda_telemetry(device: str) -> tuple[TelemetryField, TelemetryField, Teleme
         used_bytes = total_bytes - free_bytes
         memory_used = TelemetryField(available="available", value=round(used_bytes / (1024**3), 2), unit="GB")
         memory_total = TelemetryField(available="available", value=round(total_bytes / (1024**3), 2), unit="GB")
-        utilization = _unavailable("Device utilization requires vendor monitoring tools.")
-        temperature = _unavailable("Device temperature requires vendor monitoring tools.")
+        if getattr(torch.version, "hip", None):
+            utilization, temperature = _amd_gpu_utilization_temperature(index)
+        else:
+            utilization, temperature = _nvidia_gpu_utilization_temperature(index)
         return memory_used, memory_total, utilization, temperature
     except Exception as exc:
         unavailable = _unavailable(f"GPU telemetry query failed: {exc}")
         return unavailable, unavailable, unavailable, unavailable
+
+
+def _cpu_telemetry() -> tuple[TelemetryField, TelemetryField, TelemetryField, TelemetryField]:
+    memory_used = _unavailable("CPU memory telemetry is not available.")
+    memory_total = _unavailable("CPU memory telemetry is not available.")
+    utilization = _unavailable("CPU utilization telemetry is not available.")
+    temperature = _unavailable("CPU temperature telemetry is not available.")
+    try:
+        import psutil
+
+        memory = psutil.virtual_memory()
+        memory_used = TelemetryField(available="available", value=round((memory.total - memory.available) / (1024**3), 2), unit="GB")
+        memory_total = TelemetryField(available="available", value=round(memory.total / (1024**3), 2), unit="GB")
+        utilization = TelemetryField(available="available", value=round(psutil.cpu_percent(interval=None), 1), unit="%")
+        current_temp = _psutil_cpu_temperature(psutil)
+        if current_temp is not None:
+            temperature = TelemetryField(available="available", value=round(current_temp, 1), unit="C")
+    except Exception:
+        memory_used, memory_total = _linux_memory_telemetry()
+        utilization = _linux_cpu_utilization()
+
+    if not temperature.available:
+        sys_temp = _linux_cpu_temperature()
+        if sys_temp is not None:
+            temperature = TelemetryField(available="available", value=round(sys_temp, 1), unit="C")
+    return memory_used, memory_total, utilization, temperature
+
+
+def _psutil_cpu_temperature(psutil_module: Any) -> float | None:
+    try:
+        readings = psutil_module.sensors_temperatures(fahrenheit=False)
+    except Exception:
+        return None
+    preferred = ["k10temp", "coretemp", "cpu_thermal", "acpitz"]
+    groups = [*(readings.get(key, []) for key in preferred), *(items for key, items in readings.items() if key not in preferred)]
+    for items in groups:
+        for item in items:
+            current = getattr(item, "current", None)
+            if isinstance(current, (int, float)) and current > 0:
+                return float(current)
+    return None
+
+
+def _linux_memory_telemetry() -> tuple[TelemetryField, TelemetryField]:
+    try:
+        values: dict[str, int] = {}
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, raw_value = line.split(":", maxsplit=1)
+            values[key] = int(raw_value.strip().split()[0]) * 1024
+        total = values["MemTotal"]
+        available = values.get("MemAvailable", values.get("MemFree", 0))
+        return (
+            TelemetryField(available="available", value=round((total - available) / (1024**3), 2), unit="GB"),
+            TelemetryField(available="available", value=round(total / (1024**3), 2), unit="GB"),
+        )
+    except Exception:
+        unavailable = _unavailable("CPU memory telemetry is not available.")
+        return unavailable, unavailable
+
+
+def _linux_cpu_utilization() -> TelemetryField:
+    try:
+        load_1m = os.getloadavg()[0]
+        cpus = os.cpu_count() or 1
+        return TelemetryField(available="available", value=round(min(100.0, max(0.0, load_1m / cpus * 100)), 1), unit="%")
+    except Exception:
+        return _unavailable("CPU utilization telemetry is not available.")
+
+
+def _linux_cpu_temperature() -> float | None:
+    for path in sorted(Path("/sys/class/thermal").glob("thermal_zone*/temp")):
+        try:
+            value = float(path.read_text(encoding="utf-8").strip())
+        except Exception:
+            continue
+        if value > 1000:
+            value /= 1000
+        if 0 < value < 130:
+            return value
+    return None
+
+
+def _nvidia_gpu_utilization_temperature(index: int) -> tuple[TelemetryField, TelemetryField]:
+    output = _run_monitor_command(
+        [
+            "nvidia-smi",
+            f"--id={index}",
+            "--query-gpu=utilization.gpu,temperature.gpu",
+            "--format=csv,noheader,nounits",
+        ]
+    )
+    if output is None:
+        unavailable = _unavailable("nvidia-smi is not available.")
+        return unavailable, unavailable
+    parts = [part.strip() for part in output.splitlines()[0].split(",")]
+    if len(parts) < 2:
+        unavailable = _unavailable("nvidia-smi did not return utilization and temperature.")
+        return unavailable, unavailable
+    return _percent_field(parts[0], "GPU utilization is unavailable."), _temperature_field(parts[1], "GPU temperature is unavailable.")
+
+
+def _amd_gpu_utilization_temperature(index: int) -> tuple[TelemetryField, TelemetryField]:
+    for command in (
+        ["amd-smi", "metric", "-g", str(index), "--json"],
+        ["rocm-smi", f"--device={index}", "--showuse", "--showtemp"],
+        ["rocm-smi", "--showuse", "--showtemp"],
+    ):
+        output = _run_monitor_command(command)
+        if output is None:
+            continue
+        utilization = _extract_first_number(output, [r"GPU use[^0-9]*(\d+(?:\.\d+)?)", r"gfx_activity[^0-9]*(\d+(?:\.\d+)?)", r"GPU_UTIL[^0-9]*(\d+(?:\.\d+)?)"])
+        temperature = _extract_first_number(output, [r"Temperature[^0-9]*(\d+(?:\.\d+)?)", r"edge_temperature[^0-9]*(\d+(?:\.\d+)?)", r"TEMP[^0-9]*(\d+(?:\.\d+)?)"])
+        if utilization is not None or temperature is not None:
+            return (
+                TelemetryField(available="available", value=round(utilization, 1), unit="%") if utilization is not None else _unavailable("AMD GPU utilization is unavailable."),
+                TelemetryField(available="available", value=round(temperature, 1), unit="C") if temperature is not None else _unavailable("AMD GPU temperature is unavailable."),
+            )
+    unavailable = _unavailable("ROCm/AMD monitoring tools are not available.")
+    return unavailable, unavailable
+
+
+def _run_monitor_command(command: list[str]) -> str | None:
+    if shutil.which(command[0]) is None:
+        return None
+    try:
+        return subprocess.run(command, check=False, capture_output=True, text=True, timeout=1.5).stdout.strip()
+    except Exception:
+        return None
+
+
+def _extract_first_number(text: str, patterns: list[str]) -> float | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def _percent_field(value: str, reason: str) -> TelemetryField:
+    try:
+        return TelemetryField(available="available", value=round(float(value), 1), unit="%")
+    except ValueError:
+        return _unavailable(reason)
+
+
+def _temperature_field(value: str, reason: str) -> TelemetryField:
+    try:
+        return TelemetryField(available="available", value=round(float(value), 1), unit="C")
+    except ValueError:
+        return _unavailable(reason)
 
 
 def generate_validation_preview(project_root: Path, run: RunObject) -> PreviewResponse:
@@ -339,12 +484,49 @@ def generate_validation_preview(project_root: Path, run: RunObject) -> PreviewRe
     return PreviewResponse(run_id=run.id, generated_at=utc_now_iso(), diff_mode=run.settings.diff_mode, assets=assets)
 
 
+def generate_validation_preview_from_tensors(
+    project_root: Path,
+    run: RunObject,
+    *,
+    lr,
+    sr,
+    hr,
+) -> PreviewResponse:
+    preview_dir = _run_dir(project_root, run) / "previews" / "latest"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+
+    tensors = {
+        "lr": lr,
+        "sr": sr,
+        "hr": hr,
+        "diff_absolute": (sr - hr).abs(),
+    }
+    if run.settings.diff_mode in {"heatmap", "both"}:
+        tensors["diff_heatmap"] = _heatmap_tensor(tensors["diff_absolute"])
+
+    assets: list[PreviewAsset] = []
+    for kind, tensor in tensors.items():
+        path = preview_dir / f"{kind}.png"
+        width, height = _write_tensor_png(path, tensor)
+        stored = store_asset_path(project_root, path).stored
+        assets.append(
+            PreviewAsset(
+                kind=kind,
+                path=stored,
+                url=f"/projects/{run.metadata.get('project_id', '')}/runs/{run.id}/preview-assets/{kind}",
+                width=width,
+                height=height,
+            )
+        )
+    return PreviewResponse(run_id=run.id, generated_at=utc_now_iso(), diff_mode=run.settings.diff_mode, assets=assets)
+
+
 def latest_preview(project_root: Path, run_id: str, preview_index: int = 0) -> PreviewResponse:
     run = get_run(project_root, run_id)
     metadata = run.metadata.get("latest_preview")
     if metadata is not None:
         return PreviewResponse.model_validate(metadata)
-    return generate_validation_preview(project_root, run)
+    return PreviewResponse(run_id=run.id, generated_at=None, diff_mode=run.settings.diff_mode, assets=[])
 
 
 def preview_asset_path(project_root: Path, run_id: str, kind: str) -> Path:
@@ -354,10 +536,33 @@ def preview_asset_path(project_root: Path, run_id: str, kind: str) -> Path:
         raise ApiError(404, "preview_asset_not_found", "Preview asset was not found.", details={"kind": kind})
     path = _run_dir(project_root, run) / "previews" / "latest" / f"{kind}.png"
     if not path.exists():
-        generate_validation_preview(project_root, run)
-    if not path.exists():
         raise ApiError(404, "preview_asset_not_found", "Preview asset was not found.", details={"kind": kind})
     return path
+
+
+def _write_tensor_png(path: Path, tensor) -> tuple[int, int]:
+    from PIL import Image
+
+    value = tensor.detach().cpu().clamp(0, 1)
+    if value.ndim == 4:
+        value = value[0]
+    if value.shape[0] == 1:
+        value = value.repeat(3, 1, 1)
+    value = (value * 255).round().byte().permute(1, 2, 0).contiguous()
+    height = int(value.shape[0])
+    width = int(value.shape[1])
+    Image.frombytes("RGB", (width, height), bytes(value.view(-1).tolist())).save(path)
+    return width, height
+
+
+def _heatmap_tensor(diff):
+    import torch
+
+    value = diff.detach()
+    if value.ndim == 4:
+        value = value[0]
+    gray = value.mean(dim=0, keepdim=True).clamp(0, 1)
+    return torch.cat([gray, (1.0 - (gray - 0.5).abs() * 2).clamp(0, 1), 1.0 - gray], dim=0)
 
 
 def _read_definitions(project_root: Path, run: RunObject) -> dict[str, MetricDefinition]:

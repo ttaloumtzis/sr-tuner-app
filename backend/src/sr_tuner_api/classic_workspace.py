@@ -21,7 +21,7 @@ from .jobs import Job, utc_now_iso
 from .metrics import active_run_status, get_live_status, read_metrics
 from .models import CreateModelRequest, ModelObject, OptimizerConfig, SchedulerConfig, default_model_config
 from .project_store import open_project, project_file, write_project
-from .runs import ACTIVE_RUN_STATES, RunObject, RunSetupRequest, available_devices, create_run
+from .runs import ACTIVE_RUN_STATES, RunObject, RunSetupRequest, available_devices, create_run, split_indexes
 from .schemas import ProjectState, WorkspaceState
 
 
@@ -209,6 +209,10 @@ class TrainingEstimateResponse(BaseModel):
     available: bool
     estimated_time_seconds: int | None = None
     iterations_per_epoch: int | None = None
+    validation_iterations_per_epoch: int | None = None
+    validation_epochs: int = 0
+    total_train_iterations: int | None = None
+    total_validation_iterations: int | None = None
     vram_peak_bytes: int | None = None
     disk_per_checkpoint_bytes: int | None = None
     low_pair_guard: UnsupportedState | None = None
@@ -223,6 +227,7 @@ class LiveRunDetailResponse(BaseModel):
     run: RunObject | None = None
     epoch_progress: float = 0.0
     run_progress: float = 0.0
+    phase: str = "idle"
     eta_seconds: int | None = None
     recent_events: list[ActivityEvent] = Field(default_factory=list)
     log_tail: list[str] = Field(default_factory=list)
@@ -512,16 +517,36 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
     dataset = _find_dataset(project, request.dataset_id)
     model = _find_model(project, request.model_id)
     pair_count = dataset.validation.pair_count
-    validation_count = int(pair_count * request.validation_percentage) if request.validation_enabled else 0
-    train_count = max(1, pair_count - validation_count)
-    iterations = max(1, math.ceil(train_count / max(request.batch_size, 1)))
+    train_indexes, validation_indexes = split_indexes(
+        pair_count=pair_count,
+        validation_percentage=request.validation_percentage if request.validation_enabled else 0.0,
+        seed=request.validation_seed,
+        shuffle=request.validation_shuffle,
+    )
+    train_count = max(1, len(train_indexes) or pair_count)
+    validation_count = len(validation_indexes) if request.validation_enabled else 0
+    batch_size = max(request.batch_size, 1)
+    iterations = max(1, math.ceil(train_count / batch_size))
+    validation_iterations = math.ceil(validation_count / batch_size) if validation_count else 0
+    validation_epochs = (
+        request.epochs // max(request.validation_every_epochs, 1)
+        if request.validation_enabled and validation_iterations
+        else 0
+    )
+    total_train_iterations = iterations * request.epochs
+    total_validation_iterations = validation_iterations * validation_epochs
+    validation_iteration_cost = 0.45
     low_pair = None
     if pair_count < 100:
         low_pair = _unsupported("low_pair_count", "Fewer than 100 usable pairs may not generalize; add data or explicitly confirm training.", reason="missing_prerequisite")
     return TrainingEstimateResponse(
         available=dataset.validation.usable,
-        estimated_time_seconds=iterations * request.epochs,
+        estimated_time_seconds=math.ceil(total_train_iterations + total_validation_iterations * validation_iteration_cost),
         iterations_per_epoch=iterations,
+        validation_iterations_per_epoch=validation_iterations,
+        validation_epochs=validation_epochs,
+        total_train_iterations=total_train_iterations,
+        total_validation_iterations=total_validation_iterations,
         vram_peak_bytes=_estimate_vram_peak_bytes(model, request),
         disk_per_checkpoint_bytes=25_000_000,
         low_pair_guard=low_pair,
@@ -544,12 +569,26 @@ def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> i
     bytes_per_value = 2 if request.precision == "mixed" else 4
     lr_pixels = crop * crop
     hr_pixels = (crop * scale) * (crop * scale)
-    activation_layers = blocks * 4 + 8
-    activation_values = batch * (features * lr_pixels * activation_layers + 6 * hr_pixels)
+    # Autograd keeps several tensors per residual block, optimizer state, CUDA
+    # workspace/cache, and stacked LR/HR/prediction batches. This is calibrated
+    # toward observed local desktop runs rather than the tiny theoretical tensor
+    # minimum, which under-reports PyTorch GPU memory by multiple GB.
+    activation_layers = blocks * 18 + 20
+    residual_activation_values = batch * features * lr_pixels * activation_layers
+    image_activation_values = batch * 18 * hr_pixels
     parameter_values = (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
     optimizer_multiplier = 3 if request.precision == "float32" else 2
-    safety_factor = 1.35 if request.device.startswith("cuda") or request.device.startswith("rocm") else 1.1
-    return int((activation_values * bytes_per_value + parameter_values * bytes_per_value * optimizer_multiplier) * safety_factor)
+    tensor_bytes = (
+        (residual_activation_values + image_activation_values) * bytes_per_value
+        + parameter_values * bytes_per_value * optimizer_multiplier
+    )
+    if request.device.startswith(("cuda", "rocm")):
+        scale_factor = max(1.0, scale / 4)
+        feature_factor = max(1.0, features / 32)
+        block_factor = max(1.0, blocks / 4)
+        cuda_floor = int((5.8 + 0.075 * batch * scale_factor * feature_factor * block_factor) * 1024**3)
+        return max(int(tensor_bytes * 2.2), cuda_floor)
+    return int(tensor_bytes * 1.25)
 
 
 def live_detail(project_root: Path) -> LiveRunDetailResponse:
@@ -570,6 +609,7 @@ def live_detail(project_root: Path) -> LiveRunDetailResponse:
         run=run,
         epoch_progress=epoch_progress,
         run_progress=status.progress,
+        phase=status.phase,
         eta_seconds=None,
         recent_events=activity_feed(project_root, limit=5).events,
         log_tail=log_tail,

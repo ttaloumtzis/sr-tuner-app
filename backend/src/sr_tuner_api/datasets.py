@@ -166,6 +166,47 @@ def validate_paired_dataset(dataset_root: Path, scale: int, mode: ValidationMode
     )
 
 
+def delete_dataset(project_root: Path, dataset_id: str) -> tuple[ProjectState, DatasetObject]:
+    project = open_project(project_root)
+    dataset: DatasetObject | None = None
+    for raw in project.datasets:
+        if raw.get("id") == dataset_id:
+            dataset = DatasetObject.model_validate(raw)
+            break
+    if dataset is None:
+        raise ApiError(404, "dataset_not_found", "Dataset was not found.", details={"dataset_id": dataset_id})
+    active = next(
+        (
+            raw
+            for raw in project.runs
+            if raw.get("dataset_id") == dataset_id
+            and raw.get("state") in {"running", "pausing", "paused", "resuming", "stopping"}
+        ),
+        None,
+    )
+    if active is not None:
+        raise ApiError(
+            409,
+            "dataset_in_active_run",
+            "Dataset is used by an active run and cannot be deleted.",
+            details={"dataset_id": dataset_id, "run_id": active.get("id")},
+        )
+    project.datasets = [raw for raw in project.datasets if raw.get("id") != dataset_id]
+    if dataset.storage_mode == "project":
+        folder = _resolve_dataset_folder(project_root, dataset)
+        project_datasets = (project_root / "datasets").resolve()
+        if folder.exists() and folder.resolve().is_relative_to(project_datasets):
+            shutil.rmtree(folder)
+    return write_project(project), dataset
+
+
+def _resolve_dataset_folder(project_root: Path, dataset: DatasetObject) -> Path:
+    root = Path(dataset.paths.root)
+    if dataset.paths.mode == "relative":
+        return project_root / root
+    return root
+
+
 def _validate_image_policy(info: ImageInfo, path: Path, warnings: list[str], errors: list[str]) -> None:
     if info.mode == "RGB" and info.bit_depth in {8, None}:
         return

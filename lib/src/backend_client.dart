@@ -193,6 +193,14 @@ class BackendClient {
     );
   }
 
+  Future<ProjectEnvelope> deleteDataset({
+    required String projectId,
+    required String datasetId,
+  }) async {
+    final response = await _delete('/projects/$projectId/datasets/$datasetId');
+    return ProjectEnvelope.fromJson(response);
+  }
+
   Future<ProjectEnvelope> generateVideoDataset({
     required String projectId,
     required String name,
@@ -276,6 +284,14 @@ class BackendClient {
     final response = await _put('/projects/$projectId/models/$modelId', {
       'optimizer': {'type': 'adam', 'lr': lr, 'beta1': 0.9, 'beta2': 0.99},
     });
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> deleteModel({
+    required String projectId,
+    required String modelId,
+  }) async {
+    final response = await _delete('/projects/$projectId/models/$modelId');
     return ProjectEnvelope.fromJson(response);
   }
 

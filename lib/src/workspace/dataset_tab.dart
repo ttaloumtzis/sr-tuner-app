@@ -389,6 +389,54 @@ class _DatasetTabState extends State<DatasetTab> {
     );
   }
 
+  Future<void> _deleteSelectedDataset() async {
+    final dataset = _selectedDataset(widget.project);
+    if (dataset == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${dataset.name}?'),
+        content: const Text(
+          'This removes the dataset from the project. Project-owned dataset files are removed too; external referenced folders are left untouched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete dataset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final envelope = await widget.client.deleteDataset(
+        projectId: widget.project.id,
+        datasetId: dataset.id,
+      );
+      _selectedDatasetId = envelope.project.datasets.firstOrNull?.id;
+      widget.onProjectChanged(envelope.project);
+      await _loadDetail(project: envelope.project);
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   Future<void> _showVideoWizard() async {
     await _loadVideoMetadata();
     if (!mounted) {
@@ -464,6 +512,7 @@ class _DatasetTabState extends State<DatasetTab> {
                 _loadDetail(datasetId: datasetId, previewIndex: 0);
               },
               onExport: () {},
+              onDelete: _deleteSelectedDataset,
               onPreview: (index) => _loadDetail(previewIndex: index),
             ),
     );
@@ -550,6 +599,7 @@ class _DatasetPopulatedState extends StatelessWidget {
     required this.onCreateDataset,
     required this.onDatasetSelected,
     required this.onExport,
+    required this.onDelete,
     required this.onPreview,
     this.error,
   });
@@ -561,6 +611,7 @@ class _DatasetPopulatedState extends StatelessWidget {
   final VoidCallback onCreateDataset;
   final ValueChanged<String> onDatasetSelected;
   final VoidCallback onExport;
+  final VoidCallback onDelete;
   final ValueChanged<int> onPreview;
   final String? error;
 
@@ -605,6 +656,14 @@ class _DatasetPopulatedState extends StatelessWidget {
                   : null,
               icon: const Icon(Icons.ios_share),
               label: const Text('Export'),
+            ),
+            OutlinedButton.icon(
+              onPressed: busy ? null : onDelete,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete dataset'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
             ),
           ],
         ),

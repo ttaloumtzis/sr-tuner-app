@@ -121,15 +121,22 @@ class _TrainingTabState extends State<TrainingTab> {
         setState(() {
           _readiness = readiness;
           _devices = devices.isEmpty ? _devices : devices;
+          var deviceChanged = false;
           if (!_devices.any((device) => device.id == _device)) {
             _device = _devices.first.id;
+            deviceChanged = true;
           } else if (!_deviceTouched && _device == 'cpu') {
-            _device =
-                _devices
-                    .where((device) => device.id != 'cpu' && device.available)
-                    .firstOrNull
-                    ?.id ??
-                _device;
+            final preferred = _devices
+                .where((device) => device.id != 'cpu' && device.available)
+                .firstOrNull
+                ?.id;
+            if (preferred != null && preferred != _device) {
+              _device = preferred;
+              deviceChanged = true;
+            }
+          }
+          if (deviceChanged) {
+            Future.microtask(_loadEstimate);
           }
         });
       }
@@ -749,15 +756,25 @@ class _OptimizerSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DropdownButtonFormField<String>(
-            key: ValueKey('device-$device-${devices.length}'),
-            initialValue: device,
-            decoration: const InputDecoration(labelText: 'Device'),
-            items: [
+          Text('Device', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
               for (final option in devices)
-                DropdownMenuItem(value: option.id, child: Text(option.label)),
+                ChoiceChip(
+                  avatar: Icon(
+                    option.type == 'cpu' ? Icons.memory : Icons.developer_board,
+                    size: 16,
+                  ),
+                  label: Text(option.label),
+                  selected: option.id == device,
+                  onSelected: busy || !option.available
+                      ? null
+                      : (_) => onDevice(option.id),
+                ),
             ],
-            onChanged: busy ? null : (value) => onDevice(value ?? 'cpu'),
           ),
           const SizedBox(height: 12),
           SegmentedButton<String>(
@@ -899,10 +916,12 @@ class _EstimateSection extends StatelessWidget {
                 value: value?.estimatedTimeSeconds == null
                     ? '--'
                     : '${(value!.estimatedTimeSeconds! / 60).ceil()} min',
+                caption: _validationTimeCaption(value),
               ),
               SrMetricCard(
                 label: 'Iterations/epoch',
                 value: value?.iterationsPerEpoch?.toString() ?? '--',
+                caption: _validationIterationCaption(value),
               ),
               SrMetricCard(
                 label: 'Max VRAM',
@@ -1254,4 +1273,25 @@ String _formatBytes(int? bytes) {
     return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
   return '$value bytes';
+}
+
+String? _validationTimeCaption(TrainingEstimate? estimate) {
+  if (estimate == null) {
+    return null;
+  }
+  if (estimate.validationEpochs <= 0) {
+    return 'validation disabled';
+  }
+  return 'includes ${estimate.validationEpochs} validation epochs';
+}
+
+String? _validationIterationCaption(TrainingEstimate? estimate) {
+  if (estimate == null) {
+    return null;
+  }
+  final validationIterations = estimate.validationIterationsPerEpoch ?? 0;
+  if (validationIterations <= 0) {
+    return 'validation: disabled';
+  }
+  return 'validation: $validationIterations/epoch';
 }

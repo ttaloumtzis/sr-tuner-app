@@ -136,6 +136,30 @@ def update_model(project_root, model_id: str, request: UpdateModelRequest) -> tu
     return project, _derive_status(project, model)
 
 
+def delete_model(project_root, model_id: str) -> tuple[ProjectState, ModelObject]:
+    project = open_project(project_root)
+    model = _find_model(project, model_id)
+    active = next(
+        (
+            raw
+            for raw in project.runs
+            if raw.get("model_id") == model_id
+            and raw.get("state") in {"running", "pausing", "paused", "resuming", "stopping"}
+        ),
+        None,
+    )
+    if active is not None:
+        raise ApiError(
+            409,
+            "model_in_active_run",
+            "Model is used by an active run and cannot be deleted.",
+            details={"model_id": model_id, "run_id": active.get("id")},
+        )
+    project.models = [raw for raw in project.models if raw.get("id") != model_id]
+    write_project(project)
+    return project, model
+
+
 def check_dataset_model_compatibility(project_root, dataset_id: str, model_id: str) -> CompatibilityResponse:
     project = open_project(project_root)
     dataset = next((item for item in project.datasets if item.get("id") == dataset_id), None)

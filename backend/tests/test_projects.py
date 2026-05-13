@@ -490,12 +490,12 @@ def test_launch_initializes_metric_files_definitions_and_active_status(tmp_path,
     assert metrics.status_code == 200
     assert "val_psnr" in metrics.json()["definitions"]
     assert metrics.json()["definitions"]["val_psnr"]["channel_policy"] == "RGB"
-    assert metrics.json()["records"][0]["components"]["l1"] == 0
+    assert metrics.json()["records"] == []
 
     active = client.get(f"/projects/{project_id}/active-run")
     assert active.status_code == 200
     assert active.json()["run"]["id"] == run_id
-    assert active.json()["latest_metrics"]["progress"] == 0
+    assert active.json()["latest_metrics"] == {}
 
 
 def test_hardware_telemetry_marks_unavailable_fields(tmp_path, monkeypatch) -> None:
@@ -519,8 +519,10 @@ def test_hardware_telemetry_marks_unavailable_fields(tmp_path, monkeypatch) -> N
     assert telemetry.status_code == 200
     body = telemetry.json()
     assert body["device"] == "cpu"
-    assert body["memory_used"]["available"] == "unavailable"
-    assert body["memory_used"]["value"] is None
+    assert body["memory_used"]["available"] == "available"
+    assert body["memory_used"]["value"] is not None
+    assert body["memory_total"]["available"] == "available"
+    assert body["utilization"]["available"] == "available"
 
 
 def test_validation_preview_metadata_and_assets(tmp_path, monkeypatch) -> None:
@@ -547,12 +549,11 @@ def test_validation_preview_metadata_and_assets(tmp_path, monkeypatch) -> None:
 
     preview = client.get(f"/projects/{project_id}/runs/{run_id}/preview")
     assert preview.status_code == 200
-    kinds = {asset["kind"] for asset in preview.json()["assets"]}
-    assert {"lr", "sr", "hr", "diff_absolute", "diff_heatmap"} <= kinds
+    assert preview.json()["assets"] == []
+    assert preview.json()["generated_at"] is None
 
     asset = client.get(f"/projects/{project_id}/runs/{run_id}/preview-assets/lr")
-    assert asset.status_code == 200
-    assert asset.content.startswith(b"\x89PNG")
+    assert asset.status_code == 404
 
 
 def test_unknown_project_session_rejected(monkeypatch) -> None:

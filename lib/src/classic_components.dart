@@ -286,7 +286,7 @@ class _SrProgressBarState extends State<SrProgressBar>
   }
 
   void _syncAnimation() {
-    if (widget.kind == SrProgressKind.solid) {
+    if (widget.kind != SrProgressKind.indeterminate) {
       _controller.stop();
       _controller.value = 0;
     } else if (!_controller.isAnimating) {
@@ -351,18 +351,6 @@ class _ProgressPainter extends CustomPainter {
     canvas.save();
     canvas.clipRRect(RRect.fromRectAndRadius(Offset.zero & size, radius));
     canvas.drawRect(rect, Paint()..color = foreground);
-    if (kind == SrProgressKind.striped) {
-      final stripePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.25)
-        ..strokeWidth = 4;
-      for (var x = -size.height + phase * 18; x < rect.right; x += 14) {
-        canvas.drawLine(
-          Offset(rect.left + x, size.height),
-          Offset(rect.left + x + size.height, 0),
-          stripePaint,
-        );
-      }
-    }
     canvas.restore();
   }
 

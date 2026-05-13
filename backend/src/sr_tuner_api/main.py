@@ -76,6 +76,7 @@ from .datasets import (
     ReadinessResponse,
     RegisterPairedDatasetRequest,
     VideoGenerationConfig,
+    delete_dataset,
     estimate_storage,
     generate_video_dataset,
     register_paired_dataset,
@@ -95,7 +96,7 @@ from .metrics import (
     latest_preview,
     preview_asset_path,
     read_metrics,
-    generate_validation_preview,
+    generate_validation_preview_from_tensors,
     set_live_status,
     write_metric_record,
 )
@@ -107,6 +108,7 @@ from .models import (
     check_dataset_model_compatibility,
     create_model,
     default_model_config,
+    delete_model,
     get_model,
     list_models,
     update_model,
@@ -264,9 +266,26 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     batch_size = max(run.settings.batch_size, 1)
     iterations_per_epoch = math.ceil(max(len(train_dataset), 1) / batch_size)
     total_iterations = iterations_per_epoch * run.settings.epochs
+    validation_iterations = math.ceil(max(len(validation_dataset), 1) / batch_size)
     job = job_store.get(job_id)
 
     try:
+        set_live_status(
+            project_root,
+            run.id,
+            epoch=1,
+            iteration=0,
+            progress=0.0,
+            phase="training",
+            latest_metrics={
+                "learning_rate": float(optimizer.param_groups[0]["lr"]),
+                "progress": 0.0,
+                "epoch_progress": 0.0,
+                "epoch_iteration": 0.0,
+                "epoch_total_iterations": float(iterations_per_epoch),
+                "total_iterations": float(total_iterations),
+            },
+        )
         for epoch in range(1, run.settings.epochs + 1):
             job = job_store.get(job_id)
             if job.status in {"canceling", "canceled"} or job.cancel_requested:
@@ -302,15 +321,20 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                 elapsed = max(time.monotonic() - epoch_started, 1e-6)
                 average_loss = epoch_loss / max(train_count, 1)
                 average_psnr = 10.0 * math.log10(1.0 / max(average_loss * average_loss, 1e-8))
+                average_ssim = max(0.0, min(1.0, 1.0 - average_loss * 0.5))
                 global_iteration = (epoch - 1) * iterations_per_epoch + train_count
                 run_progress = min(1.0, global_iteration / max(total_iterations, 1))
                 epoch_progress = min(1.0, train_count / max(iterations_per_epoch, 1))
                 live_metrics = {
                     "train_loss_total": average_loss,
                     "val_psnr": average_psnr,
+                    "val_ssim": average_ssim,
                     "learning_rate": float(optimizer.param_groups[0]["lr"]),
                     "progress": run_progress,
                     "epoch_progress": epoch_progress,
+                    "epoch_iteration": float(train_count),
+                    "epoch_total_iterations": float(iterations_per_epoch),
+                    "total_iterations": float(total_iterations),
                     "iterations_per_second": train_count / elapsed,
                 }
                 set_live_status(
@@ -319,6 +343,7 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                     epoch=epoch,
                     iteration=global_iteration,
                     progress=run_progress,
+                    phase="training",
                     latest_metrics=live_metrics,
                 )
                 job.status = "running"
@@ -332,11 +357,38 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
             train_loss = epoch_loss / max(train_count, 1)
             train_components = {key: value / max(train_count, 1) for key, value in component_totals.items()}
             should_validate = run.settings.validation_split.enabled and epoch % max(run.settings.validation_split.every_epochs, 1) == 0
+            preview_dataset = validation_dataset if run.settings.validation_split.enabled else train_dataset
             val_loss, val_psnr, val_ssim = (
-                _evaluate_training_pass(model_impl, validation_dataset, device, batch_size=batch_size)
+                _evaluate_training_pass(
+                    model_impl,
+                    validation_dataset,
+                    device,
+                    batch_size=batch_size,
+                    progress_callback=lambda validation_count, validation_total: set_live_status(
+                        project_root,
+                        run.id,
+                        epoch=epoch,
+                        iteration=epoch * max(train_count, 1),
+                        progress=(epoch - 1 + validation_count / max(validation_total, 1)) / max(run.settings.epochs, 1),
+                        phase="validation",
+                        latest_metrics={
+                            "train_loss_total": train_loss,
+                            "learning_rate": float(optimizer.param_groups[0]["lr"]),
+                            "progress": (epoch - 1 + validation_count / max(validation_total, 1)) / max(run.settings.epochs, 1),
+                            "epoch_progress": validation_count / max(validation_total, 1),
+                            "epoch_iteration": float(validation_count),
+                            "epoch_total_iterations": float(validation_total),
+                            "total_iterations": float(total_iterations),
+                        },
+                    ),
+                )
                 if should_validate
                 else (train_loss, 0.0, 0.0)
             )
+            if should_validate or not run.settings.validation_split.enabled:
+                preview = _generate_training_preview(project_root, run, model_impl, preview_dataset, device)
+                run.metadata["latest_preview"] = preview.model_dump()
+                _persist_run_metadata(project_root, run)
             elapsed_epoch = max(time.monotonic() - epoch_started, 1e-6)
             iterations_per_second = train_count / elapsed_epoch
             progress = epoch / max(run.settings.epochs, 1)
@@ -360,6 +412,10 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                         "val_ssim": val_ssim,
                         "learning_rate": optimizer.param_groups[0]["lr"],
                         "progress": progress,
+                        "epoch_progress": 1.0,
+                        "epoch_iteration": float(validation_iterations if should_validate else train_count),
+                        "epoch_total_iterations": float(validation_iterations if should_validate else iterations_per_epoch),
+                        "total_iterations": float(total_iterations),
                         "iterations_per_second": iterations_per_second,
                     },
                     components={**train_components, "val_loss": val_loss},
@@ -389,9 +445,6 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                     scale=model.scale,
                     architecture=model.architecture,
                 )
-
-            preview = generate_validation_preview(project_root, run)
-            run.metadata["latest_preview"] = preview.model_dump()
 
             time.sleep(0.15)
 
@@ -466,7 +519,7 @@ def _detail_loss(prediction, target):
     return F.l1_loss(torch.cat([pred_x, pred_y], dim=1), torch.cat([target_x, target_y], dim=1))
 
 
-def _evaluate_training_pass(model_impl, dataset, device, *, batch_size: int = 1):
+def _evaluate_training_pass(model_impl, dataset, device, *, batch_size: int = 1, progress_callback=None):
     import math
 
     import torch
@@ -478,19 +531,52 @@ def _evaluate_training_pass(model_impl, dataset, device, *, batch_size: int = 1)
     model_impl.eval()
     losses: list[float] = []
     with torch.no_grad():
-        for index in range(0, len(dataset), max(batch_size, 1)):
+        total_batches = math.ceil(len(dataset) / max(batch_size, 1))
+        for batch_number, index in enumerate(range(0, len(dataset), max(batch_size, 1)), start=1):
             samples = [dataset[item] for item in range(index, min(index + max(batch_size, 1), len(dataset)))]
             lr_image = torch.stack([sample["lr"] for sample in samples]).to(device)
             hr_image = torch.stack([sample["hr"] for sample in samples]).to(device)
             prediction = model_impl(lr_image)
             loss = F.l1_loss(prediction, hr_image)
             losses.append(float(loss.item()))
+            if progress_callback is not None:
+                progress_callback(batch_number, total_batches)
 
     avg_loss = sum(losses) / max(len(losses), 1)
     mse = max(avg_loss * avg_loss, 1e-8)
     psnr = 10.0 * math.log10(1.0 / mse)
     ssim = max(0.0, min(1.0, 1.0 - avg_loss * 0.5))
     return avg_loss, psnr, ssim
+
+
+def _generate_training_preview(project_root: Path, run: RunObject, model_impl, dataset, device):
+    import torch
+
+    model_impl.eval()
+    with torch.no_grad():
+        sample = dataset[0]
+        lr_image = sample["lr"].unsqueeze(0).to(device)
+        hr_image = sample["hr"].unsqueeze(0).to(device)
+        prediction = model_impl(lr_image)
+    return generate_validation_preview_from_tensors(
+        project_root,
+        run,
+        lr=lr_image[0],
+        sr=prediction[0],
+        hr=hr_image[0],
+    )
+
+
+def _persist_run_metadata(project_root: Path, run: RunObject) -> None:
+    project = open_project(project_root)
+    for index, raw in enumerate(project.runs):
+        if raw.get("id") == run.id:
+            current = RunObject.model_validate(raw)
+            current.metadata = {**current.metadata, **run.metadata}
+            current.updated_at = utc_now_iso()
+            project.runs[index] = current.model_dump()
+            write_project(project)
+            return
 
 
 def _finalize_training_cancel(project_root: Path, run_id: str, job: Job) -> None:
@@ -717,6 +803,18 @@ def dataset_resynthesis_endpoint(
     return UnsupportedState(code="resynthesis_unavailable", message="Re-synthesis creates a new dataset version, but this backend path is not implemented yet.")
 
 
+@app.delete("/projects/{project_id}/datasets/{dataset_id}", response_model=ProjectResponse)
+def delete_dataset_endpoint(
+    project_id: str,
+    dataset_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project, dataset = delete_dataset(_session_project_path(project_id), dataset_id)
+    project = record_activity(project, "dataset", f"Dataset {dataset.name} deleted.", severity="warning", object_id=dataset.id)
+    project = write_project(project)
+    return _project_response(project)
+
+
 @app.get("/projects/{project_id}/models", response_model=list[ModelObject])
 def list_models_endpoint(project_id: str) -> list[ModelObject]:
     return list_models(_session_project_path(project_id))
@@ -770,6 +868,18 @@ def update_model_endpoint(
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
     project, _model = update_model(_session_project_path(project_id), model_id, request)
+    return _project_response(project)
+
+
+@app.delete("/projects/{project_id}/models/{model_id}", response_model=ProjectResponse)
+def delete_model_endpoint(
+    project_id: str,
+    model_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project, model = delete_model(_session_project_path(project_id), model_id)
+    project = record_activity(project, "model", f"Model {model.name} deleted.", severity="warning", object_id=model.id)
+    project = write_project(project)
     return _project_response(project)
 
 

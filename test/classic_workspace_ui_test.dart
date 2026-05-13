@@ -273,7 +273,7 @@ void main() {
 
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('Snapshot'), findsOneWidget);
-    expect(find.text('Epoch progress'), findsAtLeastNWidgets(1));
+    expect(find.text('Training epoch'), findsAtLeastNWidgets(1));
     expect(find.text('Run progress'), findsOneWidget);
     expect(find.text('Metric charts'), findsOneWidget);
     expect(find.text('Loss'), findsAtLeastNWidgets(1));
@@ -430,6 +430,7 @@ class _FakeBackendClient extends BackendClient {
       epoch: liveRun ? 2 : 0,
       iteration: liveRun ? 42 : 0,
       progress: liveRun ? 0.42 : 0,
+      phase: liveRun ? 'training' : 'idle',
       latestMetrics: liveRun
           ? const {
               'train_loss_total': 0.12,
@@ -689,6 +690,7 @@ class _FakeBackendClient extends BackendClient {
       run: liveRun ? _run(active: true) : null,
       epochProgress: 0.45,
       runProgress: 0.42,
+      phase: liveRun ? 'training' : 'idle',
       etaSeconds: 300,
       recentEvents: [
         ActivityEvent(

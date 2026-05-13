@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -95,7 +96,7 @@ def write_project(project: ProjectState) -> ProjectState:
     backup = backup_file(root)
     if file_path.exists():
         shutil.copy2(file_path, backup)
-    temp_path = root / f".{PROJECT_FILE_NAME}.tmp"
+    temp_path = root / f".{PROJECT_FILE_NAME}.{os.getpid()}.{id(project)}.tmp"
     temp_path.write_text(
         json.dumps(
             project.model_dump(exclude={"root_path"}, exclude_none=True),

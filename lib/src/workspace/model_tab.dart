@@ -90,6 +90,48 @@ class _ModelTabState extends State<ModelTab> {
     }
   }
 
+  Future<void> _deleteModel(ModelSummary model) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${model.name}?'),
+        content: const Text(
+          'This removes the model configuration from the project. Existing run artifacts and checkpoints are left untouched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete model'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final envelope = await widget.client.deleteModel(
+        projectId: widget.project.id,
+        modelId: model.id,
+      );
+      widget.onProjectChanged(envelope.project);
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
@@ -150,6 +192,7 @@ class _ModelTabState extends State<ModelTab> {
                       });
                     },
                     onSave: _saveAsModel,
+                    onDeleteModel: _deleteModel,
                   ),
                 ),
               ],
@@ -245,6 +288,7 @@ class _TemplateDetail extends StatelessWidget {
     required this.onScale,
     required this.onReset,
     required this.onSave,
+    required this.onDeleteModel,
     this.error,
   });
 
@@ -256,6 +300,7 @@ class _TemplateDetail extends StatelessWidget {
   final ValueChanged<int> onScale;
   final VoidCallback onReset;
   final VoidCallback onSave;
+  final ValueChanged<ModelSummary> onDeleteModel;
   final String? error;
 
   @override
@@ -431,7 +476,20 @@ class _TemplateDetail extends StatelessWidget {
                         subtitle: Text(
                           '${model.architecture} · x${model.scale} · ${model.numFeatures} features · ${model.numBlocks} blocks',
                         ),
-                        trailing: Text(model.status),
+                        trailing: Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(model.status),
+                            IconButton(
+                              onPressed: busy
+                                  ? null
+                                  : () => onDeleteModel(model),
+                              icon: const Icon(Icons.delete_outline),
+                              tooltip: 'Delete model',
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

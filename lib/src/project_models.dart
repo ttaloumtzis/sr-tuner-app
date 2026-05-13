@@ -379,6 +379,7 @@ class ActiveRunStatus {
     required this.epoch,
     required this.iteration,
     required this.progress,
+    required this.phase,
     required this.latestMetrics,
   });
 
@@ -388,6 +389,7 @@ class ActiveRunStatus {
   final int epoch;
   final int iteration;
   final double progress;
+  final String phase;
   final Map<String, double> latestMetrics;
 
   factory ActiveRunStatus.fromJson(Map<String, dynamic> json) {
@@ -403,6 +405,7 @@ class ActiveRunStatus {
       epoch: json['epoch'] as int? ?? 0,
       iteration: json['iteration'] as int? ?? 0,
       progress: (json['progress'] as num?)?.toDouble() ?? 0,
+      phase: json['phase'] as String? ?? 'idle',
       latestMetrics: {
         for (final entry in metrics.entries)
           entry.key: (entry.value as num?)?.toDouble() ?? 0,
@@ -1462,6 +1465,10 @@ class TrainingEstimate {
     required this.retention,
     this.estimatedTimeSeconds,
     this.iterationsPerEpoch,
+    this.validationIterationsPerEpoch,
+    this.validationEpochs = 0,
+    this.totalTrainIterations,
+    this.totalValidationIterations,
     this.vramPeakBytes,
     this.diskPerCheckpointBytes,
     this.lowPairGuard,
@@ -1471,6 +1478,10 @@ class TrainingEstimate {
   final bool available;
   final int? estimatedTimeSeconds;
   final int? iterationsPerEpoch;
+  final int? validationIterationsPerEpoch;
+  final int validationEpochs;
+  final int? totalTrainIterations;
+  final int? totalValidationIterations;
   final int? vramPeakBytes;
   final int? diskPerCheckpointBytes;
   final UnsupportedState? lowPairGuard;
@@ -1484,6 +1495,11 @@ class TrainingEstimate {
       available: json['available'] as bool? ?? false,
       estimatedTimeSeconds: json['estimated_time_seconds'] as int?,
       iterationsPerEpoch: json['iterations_per_epoch'] as int?,
+      validationIterationsPerEpoch:
+          json['validation_iterations_per_epoch'] as int?,
+      validationEpochs: json['validation_epochs'] as int? ?? 0,
+      totalTrainIterations: json['total_train_iterations'] as int?,
+      totalValidationIterations: json['total_validation_iterations'] as int?,
       vramPeakBytes: json['vram_peak_bytes'] as int?,
       diskPerCheckpointBytes: json['disk_per_checkpoint_bytes'] as int?,
       lowPairGuard: json['low_pair_guard'] == null
@@ -1514,6 +1530,7 @@ class LiveRunDetail {
     required this.active,
     required this.epochProgress,
     required this.runProgress,
+    required this.phase,
     required this.recentEvents,
     required this.logTail,
     required this.openLog,
@@ -1528,6 +1545,7 @@ class LiveRunDetail {
   final RunSummary? run;
   final double epochProgress;
   final double runProgress;
+  final String phase;
   final int? etaSeconds;
   final List<ActivityEvent> recentEvents;
   final List<String> logTail;
@@ -1544,6 +1562,7 @@ class LiveRunDetail {
           : RunSummary.fromJson(json['run'] as Map<String, dynamic>),
       epochProgress: (json['epoch_progress'] as num?)?.toDouble() ?? 0,
       runProgress: (json['run_progress'] as num?)?.toDouble() ?? 0,
+      phase: json['phase'] as String? ?? 'idle',
       etaSeconds: json['eta_seconds'] as int?,
       recentEvents: [
         for (final item in json['recent_events'] as List<dynamic>? ?? const [])

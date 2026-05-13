@@ -27,6 +27,7 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
   _LiveSnapshot? _snapshot;
   String? _error;
   bool _busy = false;
+  double _validationPanelWidth = 520;
 
   @override
   void initState() {
@@ -77,25 +78,15 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
       return _LiveSnapshot(status: status, detail: detail);
     }
     final telemetry = await widget.client.hardwareTelemetry(widget.project.id);
-    final previous = _snapshot;
-    final previousRun = previous?.detail.run ?? previous?.status.run;
-    final shouldRefreshEpochData =
-        previous == null ||
-        previousRun?.id != run.id ||
-        previous.status.epoch != status.epoch;
-    final metrics = shouldRefreshEpochData
-        ? await widget.client.runMetrics(
-            projectId: widget.project.id,
-            runId: run.id,
-          )
-        : previous.metrics;
-    final preview = shouldRefreshEpochData
-        ? await widget.client.validationPreview(
-            projectId: widget.project.id,
-            runId: run.id,
-            previewIndex: 0,
-          )
-        : previous.preview;
+    final metrics = await widget.client.runMetrics(
+      projectId: widget.project.id,
+      runId: run.id,
+    );
+    final preview = await widget.client.validationPreview(
+      projectId: widget.project.id,
+      runId: run.id,
+      previewIndex: 0,
+    );
     return _LiveSnapshot(
       status: status,
       detail: detail,
@@ -214,57 +205,87 @@ class _LiveMetricsTabState extends State<LiveMetricsTab> {
                 ? const Center(child: CircularProgressIndicator())
                 : snapshot.detail.oomError != null
                 ? _OomState(snapshot: snapshot)
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: ListView(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      const handleWidth = 10.0;
+                      const minMainWidth = 620.0;
+                      const minPanelWidth = 360.0;
+                      final maxPanelWidth = math.max(
+                        minPanelWidth,
+                        constraints.maxWidth -
+                            minMainWidth -
+                            tokens.gap -
+                            handleWidth,
+                      );
+                      final panelWidth = _validationPanelWidth.clamp(
+                        minPanelWidth,
+                        maxPanelWidth,
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: ListView(
                               children: [
-                                Expanded(
-                                  child: _MetricCards(snapshot: snapshot),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _MetricCards(snapshot: snapshot),
+                                    ),
+                                    SizedBox(width: tokens.gap),
+                                    SizedBox(
+                                      width: 410,
+                                      child: _HardwarePanel(
+                                        telemetry: snapshot.telemetry,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: tokens.gap),
+                                SizedBox(height: tokens.gap),
                                 SizedBox(
-                                  width: 410,
-                                  child: _HardwarePanel(
-                                    telemetry: snapshot.telemetry,
+                                  height: 455,
+                                  child: _MetricCharts(
+                                    metrics: snapshot.metrics,
+                                    status: snapshot.status,
                                   ),
+                                ),
+                                SizedBox(height: tokens.gap),
+                                SizedBox(
+                                  height: 230,
+                                  child: _EventsPanel(detail: snapshot.detail),
                                 ),
                               ],
                             ),
-                            SizedBox(height: tokens.gap),
-                            SizedBox(
-                              height: 455,
-                              child: _MetricCharts(metrics: snapshot.metrics),
+                          ),
+                          SizedBox(width: tokens.gap / 2),
+                          _ResizeHandle(
+                            onDrag: (delta) {
+                              setState(() {
+                                _validationPanelWidth =
+                                    (_validationPanelWidth - delta).clamp(
+                                      minPanelWidth,
+                                      maxPanelWidth,
+                                    );
+                              });
+                            },
+                          ),
+                          SizedBox(width: tokens.gap / 2),
+                          SizedBox(
+                            width: panelWidth,
+                            child: ListView(
+                              children: [
+                                _ValidationPanel(
+                                  detail: snapshot.detail,
+                                  preview: snapshot.preview,
+                                ),
+                              ],
                             ),
-                            SizedBox(height: tokens.gap),
-                            SizedBox(
-                              height: 230,
-                              child: _EventsPanel(detail: snapshot.detail),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: tokens.gap),
-                      SizedBox(
-                        width: 520,
-                        child: ListView(
-                          children: [
-                            SizedBox(
-                              height: 760,
-                              child: _ValidationPanel(
-                                detail: snapshot.detail,
-                                preview: snapshot.preview,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
           ),
         ],
@@ -330,9 +351,12 @@ class _StatusStrip extends StatelessWidget {
             children: [
               Expanded(
                 child: _ProgressWithLabel(
-                  label: 'Epoch progress',
+                  label: _phaseLabel(snapshot.detail.phase),
                   value: snapshot.detail.epochProgress,
-                  kind: SrProgressKind.striped,
+                  detail: _progressDetail(
+                    snapshot.status.latestMetrics['epoch_iteration'],
+                    snapshot.status.latestMetrics['epoch_total_iterations'],
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -340,7 +364,10 @@ class _StatusStrip extends StatelessWidget {
                 child: _ProgressWithLabel(
                   label: 'Run progress',
                   value: snapshot.detail.runProgress,
-                  kind: SrProgressKind.solid,
+                  detail: _progressDetail(
+                    snapshot.status.iteration.toDouble(),
+                    snapshot.status.latestMetrics['total_iterations'],
+                  ),
                 ),
               ),
             ],
@@ -355,16 +382,47 @@ class _StatusStrip extends StatelessWidget {
   }
 }
 
+class _ResizeHandle extends StatelessWidget {
+  const _ResizeHandle({required this.onDrag});
+
+  final ValueChanged<double> onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
+        child: SizedBox(
+          width: 10,
+          child: Center(
+            child: Container(
+              width: 2,
+              height: 96,
+              decoration: BoxDecoration(
+                color: tokens.border,
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProgressWithLabel extends StatelessWidget {
   const _ProgressWithLabel({
     required this.label,
     required this.value,
-    required this.kind,
+    required this.detail,
   });
 
   final String label;
   final double value;
-  final SrProgressKind kind;
+  final String detail;
 
   @override
   Widget build(BuildContext context) {
@@ -374,11 +432,16 @@ class _ProgressWithLabel extends StatelessWidget {
         Row(
           children: [
             Expanded(child: Text(label)),
-            Text('${(value * 100).clamp(0, 100).round()}%'),
+            Text(
+              [
+                '${(value * 100).clamp(0, 100).round()}%',
+                if (detail.isNotEmpty) detail,
+              ].join(' · '),
+            ),
           ],
         ),
         const SizedBox(height: 6),
-        SrProgressBar(value: value, kind: kind),
+        SrProgressBar(value: value),
       ],
     );
   }
@@ -459,13 +522,17 @@ class _MetricCardSpec {
 }
 
 class _MetricCharts extends StatelessWidget {
-  const _MetricCharts({required this.metrics});
+  const _MetricCharts({required this.metrics, required this.status});
 
   final MetricsEnvelope? metrics;
+  final ActiveRunStatus status;
 
   @override
   Widget build(BuildContext context) {
-    final records = metrics?.records ?? const <MetricRecord>[];
+    final records = _recordsWithLiveSample(
+      metrics?.records ?? const <MetricRecord>[],
+      status,
+    );
     if (records.isEmpty) {
       return const SrSection(
         title: 'Metric charts',
@@ -525,7 +592,12 @@ class _SingleMetricChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final values = [
       for (final record in records)
-        if (record.values[metricKey] != null) record.values[metricKey]!,
+        if (record.step > 0 && record.values[metricKey] != null)
+          record.values[metricKey]!,
+    ];
+    final chartRecords = [
+      for (final record in records)
+        if (record.step > 0) record,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -547,7 +619,7 @@ class _SingleMetricChart extends StatelessWidget {
           height: 92,
           child: CustomPaint(
             painter: _MetricChartPainter(
-              records: records,
+              records: chartRecords,
               metricKey: metricKey,
               yAxisLabel: yAxisLabel,
               color: color,
@@ -577,7 +649,7 @@ class _HardwarePanel extends StatelessWidget {
       );
     }
     return SrSection(
-      title: 'GPU stats',
+      title: value.deviceType == 'cpu' ? 'CPU stats' : 'GPU stats',
       subtitle: '${value.device} · ${value.deviceType}',
       child: Column(
         children: [
@@ -585,7 +657,6 @@ class _HardwarePanel extends StatelessWidget {
           _telemetryRow(context, 'Memory total', value.memoryTotal),
           _telemetryRow(context, 'Utilization', value.utilization),
           _telemetryRow(context, 'Temperature', value.temperature),
-          _telemetryRow(context, 'Speed', value.iterationSpeed),
         ],
       ),
     );
@@ -629,39 +700,76 @@ class _ValidationPanel extends StatelessWidget {
       for (final asset in value?.assets ?? const <PreviewAsset>[])
         asset.kind: asset,
     };
-    final diffAsset =
-        assetsByKind['diff_absolute'] ?? assetsByKind['diff_heatmap'];
     final slots = [
-      _PreviewSlot(label: 'Input', asset: assetsByKind['lr']),
-      _PreviewSlot(label: 'Output', asset: assetsByKind['sr']),
-      _PreviewSlot(label: 'Target', asset: assetsByKind['hr']),
-      _PreviewSlot(label: 'Diff', asset: diffAsset),
+      _PreviewSlot(
+        label: 'Input',
+        asset: assetsByKind['lr'],
+        cacheKey: value?.generatedAt,
+      ),
+      _PreviewSlot(
+        label: 'Output',
+        asset: assetsByKind['sr'],
+        cacheKey: value?.generatedAt,
+      ),
+      _PreviewSlot(
+        label: 'Target',
+        asset: assetsByKind['hr'],
+        cacheKey: value?.generatedAt,
+      ),
+      if (assetsByKind['diff_absolute'] != null)
+        _PreviewSlot(
+          label: 'Abs diff',
+          asset: assetsByKind['diff_absolute'],
+          cacheKey: value?.generatedAt,
+        ),
+      if (assetsByKind['diff_heatmap'] != null)
+        _PreviewSlot(
+          label: 'Heat diff',
+          asset: assetsByKind['diff_heatmap'],
+          cacheKey: value?.generatedAt,
+        ),
+      if (assetsByKind['diff_absolute'] == null &&
+          assetsByKind['diff_heatmap'] == null)
+        _PreviewSlot(label: 'Diff', asset: null, cacheKey: value?.generatedAt),
     ];
     return SrSection(
       title: 'Validation samples',
       subtitle: detail.validationSamples.isEmpty
           ? 'Waiting for first preview'
           : '${detail.validationSamples.length} samples',
-      child: SizedBox(
-        height: 650,
-        child: GridView.count(
-          crossAxisCount: 2,
-          childAspectRatio: 1.0,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [for (final slot in slots) _PreviewTile(slot: slot)],
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 8.0;
+          final tileWidth = (constraints.maxWidth - spacing) / 2;
+          final rows = (slots.length / 2).ceil();
+          final gridHeight = tileWidth * rows + spacing * math.max(0, rows - 1);
+          return SizedBox(
+            height: gridHeight,
+            child: GridView.count(
+              crossAxisCount: 2,
+              childAspectRatio: 1.0,
+              crossAxisSpacing: spacing,
+              mainAxisSpacing: spacing,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [for (final slot in slots) _PreviewTile(slot: slot)],
+            ),
+          );
+        },
       ),
     );
   }
 }
 
 class _PreviewSlot {
-  const _PreviewSlot({required this.label, required this.asset});
+  const _PreviewSlot({
+    required this.label,
+    required this.asset,
+    required this.cacheKey,
+  });
 
   final String label;
   final PreviewAsset? asset;
+  final String? cacheKey;
 }
 
 class _PreviewTile extends StatelessWidget {
@@ -675,13 +783,17 @@ class _PreviewTile extends StatelessWidget {
     if (asset == null) {
       return SrImagePlaceholder(label: '${slot.label} pending');
     }
+    final uri = AppConfig.apiUri(asset.url).replace(
+      queryParameters: {if (slot.cacheKey != null) 'v': slot.cacheKey!},
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: Stack(
         fit: StackFit.expand,
         children: [
           Image.network(
-            AppConfig.apiUri(asset.url).toString(),
+            uri.toString(),
+            key: ValueKey('${asset.kind}:${slot.cacheKey ?? ''}'),
             fit: BoxFit.cover,
           ),
           Align(
@@ -1015,4 +1127,51 @@ String _formatTelemetry(TelemetryField? field) {
     return '--';
   }
   return '${field.value}${field.unit == null ? '' : ' ${field.unit}'}';
+}
+
+String _phaseLabel(String phase) {
+  return switch (phase) {
+    'validation' => 'Validation epoch',
+    'training' => 'Training epoch',
+    _ => 'Epoch progress',
+  };
+}
+
+String _progressDetail(double? current, double? total) {
+  if (current == null || total == null || total <= 0) {
+    return '';
+  }
+  return '${current.round()}/${total.round()} iters';
+}
+
+List<MetricRecord> _recordsWithLiveSample(
+  List<MetricRecord> records,
+  ActiveRunStatus status,
+) {
+  final liveValues = {
+    for (final key in const [
+      'train_loss_total',
+      'val_psnr',
+      'val_ssim',
+      'learning_rate',
+      'progress',
+      'iterations_per_second',
+    ])
+      if (status.latestMetrics[key] != null) key: status.latestMetrics[key]!,
+  };
+  if (status.iteration <= 0 || liveValues.isEmpty) {
+    return records;
+  }
+  if (records.isNotEmpty && records.last.iteration >= status.iteration) {
+    return records;
+  }
+  return [
+    ...records,
+    MetricRecord(
+      step: status.epoch,
+      epoch: status.epoch,
+      iteration: status.iteration,
+      values: liveValues,
+    ),
+  ];
 }
