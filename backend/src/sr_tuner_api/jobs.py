@@ -6,8 +6,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .diagnostic_logger import create_component_logger
 from .errors import ApiError
 from .ids import new_id
+from . import logging_schema as log_schema
+
+_log = create_component_logger(log_schema.COMPONENT_JOB)
 
 
 JobStatus = Literal["queued", "running", "canceling", "canceled", "completed", "failed"]
@@ -59,11 +63,28 @@ class JobStore:
         job = Job(type=request.type, project_id=request.project_id, object_id=request.object_id)
         with self._lock:
             self._jobs[job.id] = job
+        _log.info(log_schema.EventNames.JOB_QUEUED, f"Job {job.id} created.", context={
+            "job_id": job.id, "type": job.type, "project_id": job.project_id,
+        })
         return job
 
     def put(self, job: Job) -> Job:
+        prev_status = self._jobs[job.id].status if job.id in self._jobs else None
         with self._lock:
             self._jobs[job.id] = job
+        if prev_status != job.status and job.status != "queued":
+            event = {
+                "running": log_schema.EventNames.JOB_RUNNING,
+                "canceling": log_schema.EventNames.JOB_CANCELING,
+                "canceled": log_schema.EventNames.JOB_CANCELED,
+                "completed": log_schema.EventNames.JOB_COMPLETED,
+                "failed": log_schema.EventNames.JOB_FAILED,
+            }.get(job.status)
+            if event:
+                _log.info(event, f"Job {job.id} -> {job.status}", context={
+                    "job_id": job.id, "status": job.status, "progress": job.progress,
+                    "type": job.type, "prev_status": prev_status,
+                })
         return job
 
     def get(self, job_id: str) -> Job:
@@ -83,6 +104,9 @@ class JobStore:
             job.status = "canceling"
             job.cancel_requested = True
             job.logs = [*job.logs[-49:], "Cancellation requested."]
+        _log.info(log_schema.EventNames.JOB_CANCELING, f"Job {job.id} cancel requested.", context={
+            "job_id": job.id, "type": job.type,
+        })
         return job
 
     def log_tail(self, job_id: str, limit: int = 50) -> JobLogResponse:

@@ -61,6 +61,7 @@ class _InferenceTabState extends State<InferenceTab> {
   InferenceReadiness? _readiness;
   InferenceInspector? _inspector;
   List<DeviceOption> _devices = [];
+  String _device = 'auto';
 
   @override
   void initState() {
@@ -94,13 +95,24 @@ class _InferenceTabState extends State<InferenceTab> {
   Future<void> _loadDevices() async {
     try {
       final devices = await widget.client.devices();
-      if (mounted) setState(() => _devices = devices);
+      if (mounted) {
+        setState(() {
+          _devices = devices;
+          if (_device == 'auto') {
+            final preferred = devices
+                .where((d) => d.id != 'cpu' && d.available)
+                .firstOrNull
+                ?.id;
+            _device = preferred ?? devices.first.id;
+          }
+        });
+      }
     } catch (_) {}
   }
 
   Future<void> _loadReadiness() async {
     try {
-      final r = await widget.client.inferenceReadiness(device: 'auto');
+      final r = await widget.client.inferenceReadiness(device: _device);
       if (mounted) setState(() => _readiness = r);
     } catch (_) {}
   }
@@ -153,6 +165,8 @@ class _InferenceTabState extends State<InferenceTab> {
           scale: _scale,
           tilingEnabled: _tilingEnabled,
           tileSize: _tileSize,
+          device: _device,
+          devices: _devices,
           onCheckpointChanged: (checkpoint) {
             setState(() => _selectedCheckpoint = checkpoint);
           },
@@ -164,6 +178,9 @@ class _InferenceTabState extends State<InferenceTab> {
           },
           onTileSizeChanged: (size) {
             setState(() => _tileSize = size);
+          },
+          onDeviceChanged: (value) {
+            setState(() => _device = value);
           },
           onBatchFolder: _pickBatchFolder,
           onSaveResult: _saveResult,
@@ -256,7 +273,7 @@ class _InferenceTabState extends State<InferenceTab> {
         outputDir: _outputDir,
         outputFormat: _outputFormat,
         mode: 'single',
-        device: 'auto',
+        device: _device,
       );
       if (mounted) {
         setState(() {
@@ -329,10 +346,13 @@ class _InferenceHeader extends StatelessWidget {
     required this.scale,
     required this.tilingEnabled,
     required this.tileSize,
+    required this.device,
+    required this.devices,
     required this.onCheckpointChanged,
     required this.onScaleChanged,
     required this.onTilingChanged,
     required this.onTileSizeChanged,
+    required this.onDeviceChanged,
     required this.onBatchFolder,
     required this.onSaveResult,
     required this.onRunInference,
@@ -344,10 +364,13 @@ class _InferenceHeader extends StatelessWidget {
   final int scale;
   final bool tilingEnabled;
   final int tileSize;
+  final String device;
+  final List<DeviceOption> devices;
   final ValueChanged<CheckpointSummary> onCheckpointChanged;
   final ValueChanged<int> onScaleChanged;
   final ValueChanged<bool> onTilingChanged;
   final ValueChanged<int> onTileSizeChanged;
+  final ValueChanged<String> onDeviceChanged;
   final VoidCallback onBatchFolder;
   final VoidCallback onSaveResult;
   final VoidCallback onRunInference;
@@ -390,6 +413,24 @@ class _InferenceHeader extends StatelessWidget {
               tileSize: tileSize,
               onEnabledChanged: onTilingChanged,
               onSizeChanged: onTileSizeChanged,
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 160,
+            child: DropdownButtonFormField<String>(
+              value: device,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                labelText: 'Device',
+              ),
+              items: [
+                for (final d in devices)
+                  DropdownMenuItem(value: d.id, child: Text(d.label, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) { if (v != null) onDeviceChanged(v); },
             ),
           ),
           

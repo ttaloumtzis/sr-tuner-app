@@ -499,6 +499,7 @@ class _TrainingTabState extends State<TrainingTab> {
                       _EstimateSection(
                         estimate: _estimate,
                         readiness: readiness,
+                        device: _device,
                         canCreate: canCreate,
                         busy: _busy,
                         onCreate: _createRun,
@@ -888,6 +889,7 @@ class _EstimateSection extends StatelessWidget {
   const _EstimateSection({
     required this.estimate,
     required this.readiness,
+    required this.device,
     required this.canCreate,
     required this.busy,
     required this.onCreate,
@@ -895,6 +897,7 @@ class _EstimateSection extends StatelessWidget {
 
   final TrainingEstimate? estimate;
   final TrainingReadiness? readiness;
+  final String device;
   final bool canCreate;
   final bool busy;
   final VoidCallback onCreate;
@@ -924,8 +927,12 @@ class _EstimateSection extends StatelessWidget {
                 caption: _validationIterationCaption(value),
               ),
               SrMetricCard(
-                label: 'Max VRAM',
-                value: _formatBytes(value?.vramPeakBytes),
+                label: _isGpuDevice(device) ? 'Max VRAM' : 'Max RAM',
+                value: _formatBytes(
+                  _isGpuDevice(device)
+                      ? value?.vramPeakBytes
+                      : value?.ramPeakBytes,
+                ),
               ),
               SrMetricCard(
                 label: 'Checkpoint disk',
@@ -1274,6 +1281,8 @@ String _formatBytes(int? bytes) {
   }
   return '$value bytes';
 }
+
+bool _isGpuDevice(String device) => device.startsWith('cuda') || device.startsWith('rocm');
 
 String? _validationTimeCaption(TrainingEstimate? estimate) {
   if (estimate == null) {

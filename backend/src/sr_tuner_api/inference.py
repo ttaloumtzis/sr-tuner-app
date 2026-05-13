@@ -9,11 +9,15 @@ from pydantic import BaseModel, Field
 
 from .checkpoints import CheckpointMetadata, _get_active_checkpoint, validate_checkpoint_payload
 from .datasets import SUPPORTED_IMAGE_EXTENSIONS
+from .diagnostic_logger import create_component_logger
 from .errors import ApiError
 from .ids import new_id
 from .jobs import Job, JobError, utc_now_iso
+from . import logging_schema as log_schema
 from .project_store import open_project, store_asset_path, write_project
 from .runs import DependencyItem, available_devices
+
+_log = create_component_logger(log_schema.COMPONENT_INFERENCE)
 
 
 PaddingMode = Literal["reflect", "replicate", "constant"]
@@ -112,6 +116,11 @@ def inference_readiness(device: str = "cpu") -> InferenceReadinessResponse:
 def run_inference(project_root: Path, request: InferenceRequest) -> tuple[InferenceRecord, Job]:
     readiness = inference_readiness(request.device)
     if not readiness.available:
+        _log.error(
+            log_schema.EventNames.INFERENCE_FAILED,
+            "Inference dependencies missing.",
+            context={"device": request.device, "mode": request.mode},
+        )
         raise ApiError(
             409,
             "inference_dependencies_missing",
@@ -134,6 +143,12 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
         status="running",
         started_at=utc_now_iso(),
         logs=["Inference started."],
+    )
+
+    _log.info(
+        log_schema.EventNames.INFERENCE_SUBMIT,
+        f"Inference {request.mode} submitted.",
+        context={"mode": request.mode, "device": request.device, "input_path": request.input_path, "scale": scale},
     )
 
     start = time.monotonic()
@@ -188,6 +203,42 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
     job.progress = len(successes) / max(len(per_file_results), 1)
     job.finished_at = utc_now_iso()
     job.logs.append(f"Finished in {elapsed:.1f}s. {len(successes)}/{len(per_file_results)} succeeded.")
+
+    if record_status == "failed":
+        _log.error(
+            log_schema.EventNames.INFERENCE_FAILED,
+            f"Inference failed: 0/{len(per_file_results)} succeeded.",
+            context={"mode": request.mode, "elapsed_seconds": round(elapsed, 2), "total": len(per_file_results)},
+        )
+    elif record_status == "partial":
+        _log.warn(
+            log_schema.EventNames.INFERENCE_FAILED,
+            f"Inference partial: {len(successes)}/{len(per_file_results)} succeeded.",
+            context={
+                "mode": request.mode, "elapsed_seconds": round(elapsed, 2),
+                "successes": len(successes), "failures": len(failures),
+            },
+        )
+    else:
+        _log.info(
+            log_schema.EventNames.INFERENCE_COMPLETE,
+            f"Inference {request.mode} completed.",
+            context={
+                "mode": request.mode, "elapsed_seconds": round(elapsed, 2),
+                "total_files": len(per_file_results),
+            },
+        )
+
+    if request.mode == "batch":
+        _log.info(
+            log_schema.EventNames.INFERENCE_BATCH_SUMMARY,
+            f"Batch inference summary: {len(successes)}/{len(per_file_results)} succeeded.",
+            context={
+                "mode": "batch", "elapsed_seconds": round(elapsed, 2),
+                "successes": len(successes), "failures": len(failures),
+                "total": len(per_file_results),
+            },
+        )
 
     stored_output_dir = store_asset_path(project_root, output_dir).stored
     record = InferenceRecord(

@@ -1,3 +1,4 @@
+import 'dart:io' as io;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_config.dart';
 import '../backend_client.dart';
 import '../classic_components.dart';
+import '../diagnostic_image.dart';
 import '../polling.dart';
 import '../project_models.dart';
 
@@ -786,26 +788,12 @@ class _PreviewTile extends StatelessWidget {
     final uri = AppConfig.apiUri(asset.url).replace(
       queryParameters: {if (slot.cacheKey != null) 'v': slot.cacheKey!},
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            uri.toString(),
-            key: ValueKey('${asset.kind}:${slot.cacheKey ?? ''}'),
-            fit: BoxFit.cover,
-          ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              color: Colors.black54,
-              child: Text(slot.label),
-            ),
-          ),
-        ],
-      ),
+    return DiagnosticNetworkImage(
+      uri: uri,
+      assetKind: asset.kind,
+      fit: BoxFit.cover,
+      cacheKey: slot.cacheKey,
+      label: slot.label,
     );
   }
 }
@@ -820,7 +808,7 @@ class _EventsPanel extends StatelessWidget {
     return SrSection(
       title: 'Recent events',
       trailing: OutlinedButton.icon(
-        onPressed: detail.openLog.supported ? () {} : null,
+        onPressed: detail.openLog.supported ? () => _openLogDir(detail.logDir) : null,
         icon: const Icon(Icons.article_outlined),
         label: const Text('Open log'),
       ),
@@ -939,7 +927,7 @@ class _OomState extends StatelessWidget {
               label: const Text('Guide'),
             ),
             OutlinedButton.icon(
-              onPressed: detail.openLog.supported ? () {} : null,
+              onPressed: detail.openLog.supported ? () => _openLogDir(detail.logDir) : null,
               icon: const Icon(Icons.article_outlined),
               label: const Text('Open log'),
             ),
@@ -1175,3 +1163,14 @@ List<MetricRecord> _recordsWithLiveSample(
     ),
   ];
 }
+
+void _openLogDir(String? logDir) {
+  final path = logDir;
+  if (path == null || path.isEmpty) return;
+  try {
+    io.Process.run('xdg-open', [path]);
+  } catch (_) {
+    // Fallback: silently ignore if xdg-open is unavailable
+  }
+}
+

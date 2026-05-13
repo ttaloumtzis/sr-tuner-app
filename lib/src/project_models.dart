@@ -1470,6 +1470,7 @@ class TrainingEstimate {
     this.totalTrainIterations,
     this.totalValidationIterations,
     this.vramPeakBytes,
+    this.ramPeakBytes,
     this.diskPerCheckpointBytes,
     this.lowPairGuard,
     this.ema,
@@ -1483,6 +1484,7 @@ class TrainingEstimate {
   final int? totalTrainIterations;
   final int? totalValidationIterations;
   final int? vramPeakBytes;
+  final int? ramPeakBytes;
   final int? diskPerCheckpointBytes;
   final UnsupportedState? lowPairGuard;
   final List<UnsupportedState> unsupportedLosses;
@@ -1501,6 +1503,7 @@ class TrainingEstimate {
       totalTrainIterations: json['total_train_iterations'] as int?,
       totalValidationIterations: json['total_validation_iterations'] as int?,
       vramPeakBytes: json['vram_peak_bytes'] as int?,
+      ramPeakBytes: json['ram_peak_bytes'] as int?,
       diskPerCheckpointBytes: json['disk_per_checkpoint_bytes'] as int?,
       lowPairGuard: json['low_pair_guard'] == null
           ? null
@@ -1537,6 +1540,7 @@ class LiveRunDetail {
     required this.validationSamples,
     this.run,
     this.etaSeconds,
+    this.logDir,
     this.crashSnapshot,
     this.oomError,
   });
@@ -1550,6 +1554,7 @@ class LiveRunDetail {
   final List<ActivityEvent> recentEvents;
   final List<String> logTail;
   final ActionState openLog;
+  final String? logDir;
   final List<Map<String, dynamic>> validationSamples;
   final UnsupportedState? crashSnapshot;
   final Map<String, dynamic>? oomError;
@@ -1575,6 +1580,7 @@ class LiveRunDetail {
       openLog: ActionState.fromJson(
         json['open_log'] as Map<String, dynamic>? ?? const {},
       ),
+      logDir: json['log_dir'] as String?,
       validationSamples: [
         for (final item
             in json['validation_samples'] as List<dynamic>? ?? const [])

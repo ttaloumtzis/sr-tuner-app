@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'app_config.dart';
+import 'diagnostic_logger.dart';
+import 'logging_schema.dart';
 import 'project_models.dart';
 
 class ApiException implements Exception {
@@ -11,6 +14,7 @@ class ApiException implements Exception {
     this.code,
     this.details = const {},
     this.recoverable = true,
+    this.correlationId,
   });
 
   final String message;
@@ -18,9 +22,15 @@ class ApiException implements Exception {
   final String? code;
   final Map<String, dynamic> details;
   final bool recoverable;
+  final String? correlationId;
 
   @override
-  String toString() => code == null ? message : '$message ($code)';
+  String toString() {
+    final parts = [message];
+    if (code != null) parts.add('($code)');
+    if (correlationId != null) parts.add('[correlation: $correlationId]');
+    return parts.join(' ');
+  }
 }
 
 class BackendClient {
@@ -28,10 +38,32 @@ class BackendClient {
     : _httpClient = httpClient ?? HttpClient();
 
   final HttpClient _httpClient;
+  final _log = DiagnosticLogger(component: Components.api, minimumLevel: LogLevel.info);
   String? _sessionToken;
+  String _correlationId = '';
 
   set sessionToken(String? value) {
     _sessionToken = value;
+  }
+
+  String get currentCorrelationId => _correlationId;
+
+  String beginCorrelatedAction() {
+    _correlationId = _generateCorrelationId();
+    return _correlationId;
+  }
+
+  void resetCorrelation() {
+    _correlationId = '';
+  }
+
+  static String _generateCorrelationId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return [
+      for (var i = 0; i < 16; i++)
+        bytes[i].toRadixString(16).padLeft(2, '0'),
+    ].join('');
   }
 
   Future<Map<String, dynamic>> health() => _get('/health');
@@ -542,10 +574,7 @@ class BackendClient {
         '/projects/$projectId/runs/$runId/checkpoints/$checkpointId',
       ),
     );
-    final token = _sessionToken;
-    if (token != null) {
-      request.headers.set('x-sr-tuner-token', token);
-    }
+    _addCommonHeaders(request);
     return CheckpointListEnvelope.fromJson(
       await _readJson(await request.close()),
     );
@@ -631,50 +660,123 @@ class BackendClient {
     );
   }
 
+  void _addCommonHeaders(HttpClientRequest request) {
+    final token = _sessionToken;
+    if (token != null) {
+      request.headers.set('x-sr-tuner-token', token);
+    }
+    if (_correlationId.isNotEmpty) {
+      request.headers.set('x-correlation-id', _correlationId);
+    }
+  }
+
   Future<Map<String, dynamic>> _get(String path) async {
-    final request = await _httpClient.getUrl(AppConfig.apiUri(path));
-    return _readJson(await request.close());
+    final stopwatch = Stopwatch()..start();
+    _log.info(EventNames.requestIngress, 'GET $path', context: {'method': 'GET', 'path': path});
+    try {
+      final request = await _httpClient.getUrl(AppConfig.apiUri(path));
+      _addCommonHeaders(request);
+      final result = await _readJson(await request.close());
+      _log.info(EventNames.requestComplete, 'GET $path -> OK', context: {
+        'method': 'GET', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds,
+      });
+      return result;
+    } catch (e) {
+      _log.error(EventNames.requestServiceError, 'GET $path failed: $e', context: {
+        'method': 'GET', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'error': e.toString(),
+      });
+      rethrow;
+    }
   }
 
   Future<List<dynamic>> _getList(String path) async {
-    final request = await _httpClient.getUrl(AppConfig.apiUri(path));
-    final response = await request.close();
-    final text = await response.transform(utf8.decoder).join();
-    final decoded = text.isEmpty
-        ? <dynamic>[]
-        : jsonDecode(text) as List<dynamic>;
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
-        'Backend request failed.',
-        statusCode: response.statusCode,
-      );
+    final stopwatch = Stopwatch()..start();
+    _log.info(EventNames.requestIngress, 'GET $path (list)', context: {'method': 'GET', 'path': path});
+    try {
+      final request = await _httpClient.getUrl(AppConfig.apiUri(path));
+      _addCommonHeaders(request);
+      final response = await request.close();
+      final text = await response.transform(utf8.decoder).join();
+      final decoded = text.isEmpty
+          ? <dynamic>[]
+          : jsonDecode(text) as List<dynamic>;
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'Backend request failed.',
+          statusCode: response.statusCode,
+        );
+      }
+      _log.info(EventNames.requestComplete, 'GET $path (list) -> OK', context: {
+        'method': 'GET', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'count': decoded.length,
+      });
+      return decoded;
+    } catch (e) {
+      _log.error(EventNames.requestServiceError, 'GET $path (list) failed: $e', context: {
+        'method': 'GET', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'error': e.toString(),
+      });
+      rethrow;
     }
-    return decoded;
   }
 
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final request = await _jsonRequest('POST', path, body);
-    return _readJson(await request.close());
+    final stopwatch = Stopwatch()..start();
+    _log.info(EventNames.requestIngress, 'POST $path', context: {'method': 'POST', 'path': path});
+    try {
+      final request = await _jsonRequest('POST', path, body);
+      final result = await _readJson(await request.close());
+      _log.info(EventNames.requestComplete, 'POST $path -> OK', context: {
+        'method': 'POST', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds,
+      });
+      return result;
+    } catch (e) {
+      _log.error(EventNames.requestServiceError, 'POST $path failed: $e', context: {
+        'method': 'POST', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'error': e.toString(),
+      });
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> _put(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final request = await _jsonRequest('PUT', path, body);
-    return _readJson(await request.close());
+    final stopwatch = Stopwatch()..start();
+    _log.info(EventNames.requestIngress, 'PUT $path', context: {'method': 'PUT', 'path': path});
+    try {
+      final request = await _jsonRequest('PUT', path, body);
+      final result = await _readJson(await request.close());
+      _log.info(EventNames.requestComplete, 'PUT $path -> OK', context: {
+        'method': 'PUT', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds,
+      });
+      return result;
+    } catch (e) {
+      _log.error(EventNames.requestServiceError, 'PUT $path failed: $e', context: {
+        'method': 'PUT', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'error': e.toString(),
+      });
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> _delete(String path) async {
-    final request = await _httpClient.openUrl('DELETE', AppConfig.apiUri(path));
-    final token = _sessionToken;
-    if (token != null) {
-      request.headers.set('x-sr-tuner-token', token);
+    final stopwatch = Stopwatch()..start();
+    _log.info(EventNames.requestIngress, 'DELETE $path', context: {'method': 'DELETE', 'path': path});
+    try {
+      final request = await _httpClient.openUrl('DELETE', AppConfig.apiUri(path));
+      _addCommonHeaders(request);
+      final result = await _readJson(await request.close());
+      _log.info(EventNames.requestComplete, 'DELETE $path -> OK', context: {
+        'method': 'DELETE', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds,
+      });
+      return result;
+    } catch (e) {
+      _log.error(EventNames.requestServiceError, 'DELETE $path failed: $e', context: {
+        'method': 'DELETE', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'error': e.toString(),
+      });
+      rethrow;
     }
-    return _readJson(await request.close());
   }
 
   Future<HttpClientRequest> _jsonRequest(
@@ -684,10 +786,7 @@ class BackendClient {
   ) async {
     final request = await _httpClient.openUrl(method, AppConfig.apiUri(path));
     request.headers.contentType = ContentType.json;
-    final token = _sessionToken;
-    if (token != null) {
-      request.headers.set('x-sr-tuner-token', token);
-    }
+    _addCommonHeaders(request);
     request.write(jsonEncode(body));
     return request;
   }
@@ -697,6 +796,12 @@ class BackendClient {
     final decoded = text.isEmpty
         ? <String, dynamic>{}
         : jsonDecode(text) as Map<String, dynamic>;
+
+    final responseCorrelationId = response.headers.value('x-correlation-id');
+    if (responseCorrelationId != null && responseCorrelationId.isNotEmpty) {
+      _correlationId = responseCorrelationId;
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = decoded['error'];
       if (error is Map<String, dynamic>) {
@@ -706,11 +811,13 @@ class BackendClient {
           code: error['code']?.toString(),
           details: error['details'] as Map<String, dynamic>? ?? const {},
           recoverable: error['recoverable'] as bool? ?? true,
+          correlationId: _correlationId.isNotEmpty ? _correlationId : null,
         );
       }
       throw ApiException(
         decoded['detail']?.toString() ?? 'Backend request failed.',
         statusCode: response.statusCode,
+        correlationId: _correlationId.isNotEmpty ? _correlationId : null,
       );
     }
     return decoded;

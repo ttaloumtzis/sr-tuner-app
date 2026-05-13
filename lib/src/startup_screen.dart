@@ -17,6 +17,7 @@ class StartupScreen extends StatefulWidget {
     required this.onForgetRecent,
     required this.onCreate,
     required this.onOpen,
+    this.onRetry,
     super.key,
   });
 
@@ -28,6 +29,7 @@ class StartupScreen extends StatefulWidget {
   final Future<void> Function(String parentPath, String name, {bool createHere})
   onCreate;
   final Future<void> Function(String path) onOpen;
+  final Future<void> Function()? onRetry;
 
   @override
   State<StartupScreen> createState() => _StartupScreenState();
@@ -101,7 +103,7 @@ class _StartupScreenState extends State<StartupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _Header(error: widget.error),
+                  _Header(error: widget.error, onRetry: widget.onRetry),
                   SizedBox(height: tokens.gap),
                   Expanded(
                     child: LayoutBuilder(
@@ -170,9 +172,10 @@ class _StartupScreenState extends State<StartupScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.error});
+  const _Header({required this.error, this.onRetry});
 
   final ApiException? error;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -206,11 +209,28 @@ class _Header extends StatelessWidget {
         if (error != null) ...[
           SizedBox(height: tokens.compactGap),
           SrBanner(
-            title: error!.code,
+            title: error!.code ?? 'Backend startup failed',
             message: error!.message,
             severity: 'error',
             icon: Icons.error_outline,
           ),
+          const SizedBox(height: 8),
+          if (error!.code == 'backend_process_exited' ||
+              error!.message.contains('did not become healthy')) ...[
+            Text(
+              'Try running the backend manually:\n'
+              '  cd ${Directory.current.path} && uv run --project backend uvicorn '
+              'sr_tuner_api.main:app --app-dir backend/src --host 127.0.0.1 --port 8765',
+              style: TextStyle(color: tokens.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            if (onRetry != null)
+              OutlinedButton.icon(
+                onPressed: () => onRetry!(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+          ],
         ],
       ],
     );

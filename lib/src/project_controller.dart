@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import 'backend_client.dart';
 import 'backend_process.dart';
+import 'diagnostic_logger.dart';
+import 'logging_schema.dart';
 import 'project_models.dart';
 import 'startup_screen.dart';
 import 'workspace/project_workspace.dart';
@@ -22,6 +24,7 @@ class _ProjectControllerState extends State<ProjectController>
   final _client = BackendClient();
   final _store = WorkspaceStore();
   late final BackendProcess _backend = BackendProcess(_client);
+  final _log = DiagnosticLogger(component: Components.frontend, minimumLevel: LogLevel.info);
 
   ProjectState? _project;
   List<RecentProject> _recentProjects = const [];
@@ -39,6 +42,7 @@ class _ProjectControllerState extends State<ProjectController>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
+      _backend.killSync();
       unawaited(_disposeResources());
     }
   }
@@ -50,6 +54,8 @@ class _ProjectControllerState extends State<ProjectController>
       unawaited(_loadRecentProjects());
       return;
     }
+    _client.beginCorrelatedAction();
+    _log.info(EventNames.workflowAction, 'Restoring project from last session.', context: {'path': lastPath});
     await _runProjectAction(() async {
       await _backend.ensureStarted();
       final envelope = await _client.openProject(lastPath);
@@ -69,8 +75,14 @@ class _ProjectControllerState extends State<ProjectController>
         await _store.saveLastProjectPath(project.rootPath);
       }
     } on ApiException catch (error) {
+      _log.error(EventNames.workflowError, 'Project action failed: ${error.message}', context: {
+        'code': error.code,
+        'status_code': error.statusCode,
+        'correlation_id': error.correlationId,
+      });
       _error = error;
     } catch (error) {
+      _log.error(EventNames.workflowError, 'Unexpected project action error: $error');
       _error = ApiException(error.toString());
     } finally {
       if (mounted) {
@@ -83,12 +95,15 @@ class _ProjectControllerState extends State<ProjectController>
   }
 
   Future<void> _loadRecentProjects() async {
+    _client.beginCorrelatedAction();
+    _log.info(EventNames.workflowAction, 'Loading recent projects.');
     try {
       await _backend.ensureStarted();
       final envelope = await _client.recentProjects();
       if (mounted) {
         setState(() => _recentProjects = envelope.projects);
       }
+      _log.info(EventNames.workflowAction, 'Recent projects loaded.', context: {'count': envelope.projects.length});
     } catch (_) {
       if (mounted) {
         setState(() => _recentProjects = const []);
@@ -97,6 +112,8 @@ class _ProjectControllerState extends State<ProjectController>
   }
 
   Future<void> _forgetRecentProject(String path) async {
+    _client.beginCorrelatedAction();
+    _log.info(EventNames.workflowAction, 'Forgetting recent project.', context: {'path': path});
     setState(() {
       _busy = true;
       _error = null;
@@ -123,6 +140,12 @@ class _ProjectControllerState extends State<ProjectController>
     String name, {
     bool createHere = false,
   }) async {
+    _client.beginCorrelatedAction();
+    _log.info(EventNames.workflowAction, 'Creating project.', context: {
+      'parent_path': parentPath,
+      'name': name,
+      'create_here': createHere,
+    });
     await _runProjectAction(() async {
       await _backend.ensureStarted();
       final envelope = await _client.createProject(
@@ -131,14 +154,18 @@ class _ProjectControllerState extends State<ProjectController>
         createHere: createHere,
       );
       _project = envelope.project;
+      _log.info(EventNames.workflowAction, 'Project created.', context: {'project_id': _project?.id, 'project_name': name});
     });
   }
 
   Future<void> _openProject(String path) async {
+    _client.beginCorrelatedAction();
+    _log.info(EventNames.workflowAction, 'Opening project.', context: {'path': path});
     await _runProjectAction(() async {
       await _backend.ensureStarted();
       final envelope = await _client.openProject(path);
       _project = envelope.project;
+      _log.info(EventNames.workflowAction, 'Project opened.', context: {'project_id': _project?.id});
     });
   }
 
@@ -148,6 +175,7 @@ class _ProjectControllerState extends State<ProjectController>
       return;
     }
     try {
+      _log.info(EventNames.workflowAction, 'Saving selected tab.', context: {'tab_index': index, 'project_id': project.id});
       final envelope = await _client.saveWorkspace(
         projectId: project.id,
         selectedTab: index,
@@ -163,6 +191,8 @@ class _ProjectControllerState extends State<ProjectController>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _log.info(EventNames.backendShutdown, 'Project controller disposing.');
+    _backend.killSync();
     unawaited(_disposeResources());
     super.dispose();
   }
@@ -178,6 +208,7 @@ class _ProjectControllerState extends State<ProjectController>
   }
 
   Future<void> _disposeResourcesOnce() async {
+    _log.info(EventNames.backendShutdown, 'Shutting down backend and releasing resources.');
     await _backend.dispose();
     _client.close();
   }
@@ -209,6 +240,7 @@ class _ProjectControllerState extends State<ProjectController>
       onForgetRecent: _forgetRecentProject,
       onCreate: _createProject,
       onOpen: _openProject,
+      onRetry: _restoreProject,
     );
   }
 }

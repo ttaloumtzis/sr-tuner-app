@@ -13,10 +13,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .cause_codes import CauseCodes
+from .diagnostic_logger import create_component_logger
 from .errors import ApiError
+from . import logging_schema as log_schema
 from .project_store import open_project, store_asset_path, write_project
 from .runs import ACTIVE_RUN_STATES, RunObject, get_run
 from .schemas import ProjectState, utc_now_iso
+
+_log = create_component_logger(log_schema.COMPONENT_METRICS)
 
 
 MetricKind = Literal["loss", "quality", "learning_rate", "progress", "speed"]
@@ -209,6 +214,11 @@ def write_metric_record(project_root: Path, run: RunObject, record: MetricRecord
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as stream:
         stream.write(record.model_dump_json() + "\n")
+    _log.debug(
+        log_schema.EventNames.METRICS_INGEST,
+        f"Metric record written for run {run.id}.",
+        context={"run_id": run.id, "step": record.step, "epoch": record.epoch, "metric_count": len(record.values)},
+    )
 
 
 def read_metrics(project_root: Path, run_id: str, *, limit: int = 200) -> MetricsResponse:
@@ -256,6 +266,7 @@ def hardware_telemetry(run: RunObject | None = None) -> HardwareTelemetry:
         memory_used, memory_total, utilization, temperature = _cuda_telemetry(device)
     elif device == "cpu":
         memory_used, memory_total, utilization, temperature = _cpu_telemetry()
+    _log_telemetry_availability(device, memory_used, utilization, temperature, latest_speed)
     return HardwareTelemetry(
         device=device,
         device_type=device_type,
@@ -270,6 +281,30 @@ def hardware_telemetry(run: RunObject | None = None) -> HardwareTelemetry:
             reason=None if latest_speed is not None else "No speed metric has been recorded yet.",
         ),
     )
+
+
+def _log_telemetry_availability(device: str, memory_used: TelemetryField, utilization: TelemetryField, temperature: TelemetryField, latest_speed: float | None) -> None:
+    unavailability_reasons: dict[str, str] = {}
+    if memory_used.available != "available":
+        unavailability_reasons["memory"] = memory_used.reason or cause_for_device(device, "memory")
+    if utilization.available != "available":
+        unavailability_reasons["utilization"] = utilization.reason or CauseCodes.TELEMETRY_UTILIZATION_UNSUPPORTED
+    if temperature.available != "available":
+        unavailability_reasons["temperature"] = temperature.reason or CauseCodes.TELEMETRY_TEMPERATURE_UNSUPPORTED
+    if latest_speed is None:
+        unavailability_reasons["speed"] = CauseCodes.TELEMETRY_SPEED_UNSUPPORTED
+    if unavailability_reasons:
+        _log.warn(
+            log_schema.EventNames.TELEMETRY_UNAVAILABLE,
+            f"Telemetry fields unavailable for {device}.",
+            context={"device": device, "unavailable_fields": unavailability_reasons},
+        )
+
+
+def cause_for_device(device: str, field: str) -> str:
+    if device.startswith("cuda"):
+        return CauseCodes.TELEMETRY_CUDA_UNAVAILABLE
+    return CauseCodes.TELEMETRY_VENDOR_TOOLING_MISSING
 
 
 def hardware_telemetry_for_project(project_root: Path) -> HardwareTelemetry:

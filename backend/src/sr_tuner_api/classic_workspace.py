@@ -214,6 +214,7 @@ class TrainingEstimateResponse(BaseModel):
     total_train_iterations: int | None = None
     total_validation_iterations: int | None = None
     vram_peak_bytes: int | None = None
+    ram_peak_bytes: int | None = None
     disk_per_checkpoint_bytes: int | None = None
     low_pair_guard: UnsupportedState | None = None
     unsupported_losses: list[UnsupportedState] = Field(default_factory=list)
@@ -232,6 +233,7 @@ class LiveRunDetailResponse(BaseModel):
     recent_events: list[ActivityEvent] = Field(default_factory=list)
     log_tail: list[str] = Field(default_factory=list)
     open_log: ActionState
+    log_dir: str | None = None
     validation_samples: list[dict[str, Any]] = Field(default_factory=list)
     crash_snapshot: UnsupportedState | None = None
     oom_error: dict[str, Any] | None = None
@@ -548,6 +550,7 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
         total_train_iterations=total_train_iterations,
         total_validation_iterations=total_validation_iterations,
         vram_peak_bytes=_estimate_vram_peak_bytes(model, request),
+        ram_peak_bytes=_estimate_ram_peak_bytes(model, request),
         disk_per_checkpoint_bytes=25_000_000,
         low_pair_guard=low_pair,
         unsupported_losses=[],
@@ -591,6 +594,40 @@ def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> i
     return int(tensor_bytes * 1.25)
 
 
+def _estimate_ram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:
+    """Estimate CPU system RAM needed for training.
+
+    Covers model parameters in CPU memory, dataloader prefetch buffers, image
+    decode overhead, and a baseline OS/runtime footprint. Unlike GPU VRAM the
+    ceiling is driven by full-resolution image decode buffers, not activations.
+    """
+    features = max(model.num_features, 1)
+    blocks = max(model.num_blocks, 1)
+    batch = max(request.batch_size, 1)
+    bytes_per_value = 2 if request.precision == "mixed" else 4
+
+    # Model parameters in CPU memory (always resident)
+    param_count = (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+    param_bytes = param_count * bytes_per_value * 2  # params + gradients
+
+    # Optimizer state (Adam keeps 2x extra moments)
+    optimizer_bytes = param_count * bytes_per_value * 2
+
+    # Dataloader prefetch: worst-case ~4 batches of decoded full-res images
+    # Assume 1080p crops → ~2 MB per image × batch × prefetch factor
+    bytes_per_image = 1_920 * 1_080 * 3  # ~6 MB at full resolution
+    dataloader_bytes = bytes_per_image * batch * 4
+
+    # Pillow/PyTorch image decode scratch buffers (another 2 batches)
+    decode_bytes = bytes_per_image * batch * 2
+
+    # Baseline runtime overhead (Python, FastAPI, OS buffers)
+    baseline = 512 * 1024 * 1024  # 512 MB floor
+
+    total = param_bytes + optimizer_bytes + dataloader_bytes + decode_bytes + baseline
+    return int(total)
+
+
 def live_detail(project_root: Path) -> LiveRunDetailResponse:
     status = active_run_status(project_root)
     run = status.run
@@ -613,6 +650,7 @@ def live_detail(project_root: Path) -> LiveRunDetailResponse:
         eta_seconds=None,
         recent_events=activity_feed(project_root, limit=5).events,
         log_tail=log_tail,
+        log_dir=run.log_dir,
         open_log=ActionState(id="open_log", label="Open log", supported=run.log_dir is not None, reason=None if run.log_dir else "No log directory has been recorded."),
         validation_samples=[run.metadata.get("latest_preview", {})] if run.metadata.get("latest_preview") else [],
         crash_snapshot=_unsupported("crash_snapshot_unavailable", "No protected crash snapshot has been recorded.", reason="unavailable"),

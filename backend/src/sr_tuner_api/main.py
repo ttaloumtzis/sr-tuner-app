@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
+from .diagnostic_logger import DiagnosticLogger, create_component_logger
+from .logging_middleware import RequestLoggingMiddleware
+from . import logging_schema as log_schema
 from .inference import (
     InferenceHistoryResponse,
     InferenceReadinessResponse,
@@ -148,9 +151,12 @@ from .schemas import (
 from .security import require_session_token
 
 app = FastAPI(title="sr-tuner local API", version=__version__)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_exception_handler(StarletteHTTPException, http_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+_log = create_component_logger(log_schema.COMPONENT_BACKEND)
 
 _project_sessions: dict[str, Path] = {}
 
@@ -172,9 +178,10 @@ def _parent_process_alive(parent_pid: int) -> bool:
 def _watch_parent_process(parent_pid: int) -> None:
     while True:
         if not _parent_process_alive(parent_pid):
+            _log.warn(log_schema.EventNames.PARENT_WATCHDOG, "Parent process died, terminating backend.", context={"parent_pid": parent_pid})
             _terminate_process()
             return
-        time.sleep(1)
+        time.sleep(0.2)
 
 
 def _start_parent_watchdog() -> None:
@@ -189,6 +196,7 @@ def _start_parent_watchdog() -> None:
 
 
 _start_parent_watchdog()
+_log.info(log_schema.EventNames.BACKEND_START, f"{APP_NAME} v{__version__} started.", context={"app": APP_NAME, "version": __version__})
 
 
 def _remember_project(project_root: str, project_id: str) -> None:
@@ -265,8 +273,13 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     started_at = time.monotonic()
     batch_size = max(run.settings.batch_size, 1)
     iterations_per_epoch = math.ceil(max(len(train_dataset), 1) / batch_size)
-    total_iterations = iterations_per_epoch * run.settings.epochs
     validation_iterations = math.ceil(max(len(validation_dataset), 1) / batch_size)
+    validation_epochs_total = (
+        run.settings.epochs // max(run.settings.validation_split.every_epochs, 1)
+        if run.settings.validation_split.enabled and validation_iterations
+        else 0
+    )
+    total_iterations = iterations_per_epoch * run.settings.epochs + validation_iterations * validation_epochs_total
     job = job_store.get(job_id)
 
     try:
@@ -364,20 +377,20 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                     validation_dataset,
                     device,
                     batch_size=batch_size,
-                    progress_callback=lambda validation_count, validation_total: set_live_status(
+                    progress_callback=lambda vc, vt: set_live_status(
                         project_root,
                         run.id,
                         epoch=epoch,
-                        iteration=epoch * max(train_count, 1),
-                        progress=(epoch - 1 + validation_count / max(validation_total, 1)) / max(run.settings.epochs, 1),
+                        iteration=epoch * max(train_count, 1) + vc,
+                        progress=min(1.0, (epoch * max(train_count, 1) + vc) / max(total_iterations, 1)),
                         phase="validation",
                         latest_metrics={
                             "train_loss_total": train_loss,
                             "learning_rate": float(optimizer.param_groups[0]["lr"]),
-                            "progress": (epoch - 1 + validation_count / max(validation_total, 1)) / max(run.settings.epochs, 1),
-                            "epoch_progress": validation_count / max(validation_total, 1),
-                            "epoch_iteration": float(validation_count),
-                            "epoch_total_iterations": float(validation_total),
+                            "progress": min(1.0, (epoch * max(train_count, 1) + vc) / max(total_iterations, 1)),
+                            "epoch_progress": vc / max(vt, 1),
+                            "epoch_iteration": float(vc),
+                            "epoch_total_iterations": float(vt),
                             "total_iterations": float(total_iterations),
                         },
                     ),

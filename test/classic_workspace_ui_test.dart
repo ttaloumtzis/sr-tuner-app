@@ -675,6 +675,7 @@ class _FakeBackendClient extends BackendClient {
       estimatedTimeSeconds: 1800,
       iterationsPerEpoch: 120,
       vramPeakBytes: 2147483648,
+      ramPeakBytes: 4294967296,
       diskPerCheckpointBytes: 10485760,
       unsupportedLosses: const [],
       suggestedFixes: const [],
