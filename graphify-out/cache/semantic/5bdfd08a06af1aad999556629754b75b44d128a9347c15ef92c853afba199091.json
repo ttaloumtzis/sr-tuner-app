@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "debug-observability", "target": "live-metrics", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/specs/live-metrics/spec.md", "source_location": null, "weight": 1.0}], "hyperedges": []}

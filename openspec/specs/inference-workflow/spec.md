@@ -4,18 +4,18 @@ Define how sr-tuner runs checkpoint-based single-image and batch super-resolutio
 ## Requirements
 
 ### Requirement: Single image inference
-The system SHALL allow users to run inference on a single image using a selected trained model.
+The system SHALL allow users to run inference on a single image using a selected model checkpoint, and SHALL record correlated diagnostic logs across frontend action, API request lifecycle, backend execution stages, and completion outcome.
 
 #### Scenario: Single image is processed
-- **WHEN** the user selects an image, trained model, output scale, output settings, and starts inference
-- **THEN** the backend loads core weights from the model, constructs input/output layers for the selected scale, writes the SR output, and records inference metadata
+- **WHEN** the user selects an image, checkpoint, output settings, and starts inference
+- **THEN** the backend writes the SR output, records inference metadata, and emits correlated logs that identify request dispatch, job start, execution milestones, and final status
 
 ### Requirement: Batch inference
-The system SHALL allow users to run inference on a folder of images using a selected trained model.
+The system SHALL allow users to run inference on a folder of images using a selected model checkpoint, and SHALL emit structured per-batch diagnostic summaries with correlation context and per-file failure details where applicable.
 
 #### Scenario: Batch folder is processed
 - **WHEN** the user selects a folder and starts batch inference
-- **THEN** the backend writes outputs for supported images and records batch inference metadata
+- **THEN** the backend writes outputs for supported images, records batch inference metadata, and emits correlated batch lifecycle logs including counts of successes and failures
 
 ### Requirement: Trained model-based inference
 The system SHALL use trained models (with core weights) for inference instead of individual checkpoints. The user SHALL specify the output scale at inference time.

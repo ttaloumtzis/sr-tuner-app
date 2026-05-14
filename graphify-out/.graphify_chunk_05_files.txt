@@ -1,0 +1,10 @@
+/home/theodoros/Projects/sr-tuner-app/scripts/gen_fixtures.py
+/home/theodoros/Projects/sr-tuner-app/scripts/setup_backend_cpu.ps1
+/home/theodoros/Projects/sr-tuner-app/scripts/dev_frontend.ps1
+/home/theodoros/Projects/sr-tuner-app/scripts/dev_backend.ps1
+/home/theodoros/Projects/sr-tuner-app/scripts/clean.ps1
+/home/theodoros/Projects/sr-tuner-app/scripts/stop_backend.ps1
+/home/theodoros/Projects/sr-tuner-app/test/classic_workspace_ui_test.dart
+/home/theodoros/Projects/sr-tuner-app/test/project_models_test.dart
+/home/theodoros/Projects/sr-tuner-app/test/widget_test.dart
+/home/theodoros/Projects/sr-tuner-app/test/logging_schema_test.dart

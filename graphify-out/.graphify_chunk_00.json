@@ -1,0 +1,240 @@
+{
+  "nodes": [
+    {"id": "generated_plugin_registrant_cc", "label": "Generated Plugin Registrant (CC)", "file_type": "code", "source_file": "linux/flutter/generated_plugin_registrant.cc", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "generated_plugin_registrant_h", "label": "Generated Plugin Registrant (Header)", "file_type": "code", "source_file": "linux/flutter/generated_plugin_registrant.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_application", "label": "FlApplication - Flutter GTK Application", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_application.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_basic_message_channel", "label": "FlBasicMessageChannel", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_basic_message_channel.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_binary_codec", "label": "FlBinaryCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_binary_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_binary_messenger", "label": "FlBinaryMessenger", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_binary_messenger.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_dart_project", "label": "FlDartProject", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_dart_project.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_engine", "label": "FlEngine - Flutter Engine", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_engine.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_event_channel", "label": "FlEventChannel", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_event_channel.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_json_message_codec", "label": "FlJsonMessageCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_json_message_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_json_method_codec", "label": "FlJsonMethodCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_json_method_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_message_codec", "label": "FlMessageCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_message_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_method_call", "label": "FlMethodCall", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_call.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_method_channel", "label": "FlMethodChannel", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_channel.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_method_codec", "label": "FlMethodCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_method_response", "label": "FlMethodResponse", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_response.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_pixel_buffer_texture", "label": "FlPixelBufferTexture", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_pixel_buffer_texture.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_plugin_registrar", "label": "FlPluginRegistrar", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_plugin_registrar.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_plugin_registry", "label": "FlPluginRegistry", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_plugin_registry.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_standard_message_codec", "label": "FlStandardMessageCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_standard_message_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_standard_method_codec", "label": "FlStandardMethodCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_standard_method_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "fl_string_codec", "label": "FlStringCodec", "file_type": "code", "source_file": "linux/flutter/ephemeral/flutter_linux/fl_string_codec.h", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}
+  ],
+  "edges": [
+    {
+      "source": "fl_engine", "target": "fl_binary_messenger",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_engine.h",
+      "source_location": 58,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_engine", "target": "fl_dart_project",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_engine.h",
+      "source_location": 38,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_basic_message_channel", "target": "fl_binary_messenger",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_basic_message_channel.h",
+      "source_location": 127,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_basic_message_channel", "target": "fl_message_codec",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_basic_message_channel.h",
+      "source_location": 130,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_method_channel", "target": "fl_binary_messenger",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_channel.h",
+      "source_location": 134,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_method_channel", "target": "fl_method_codec",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_channel.h",
+      "source_location": 136,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_method_channel", "target": "fl_method_call",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_channel.h",
+      "source_location": 119,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_method_channel", "target": "fl_method_response",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_channel.h",
+      "source_location": 192,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_event_channel", "target": "fl_binary_messenger",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_event_channel.h",
+      "source_location": 103,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_event_channel", "target": "fl_method_codec",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_event_channel.h",
+      "source_location": 105,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_event_channel", "target": "fl_method_response",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_event_channel.h",
+      "source_location": 88,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_method_call", "target": "fl_method_response",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_method_call.h",
+      "source_location": 63,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_binary_codec", "target": "fl_message_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_binary_codec.h",
+      "source_location": 23,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_string_codec", "target": "fl_message_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_string_codec.h",
+      "source_location": 23,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_standard_message_codec", "target": "fl_message_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_standard_message_codec.h",
+      "source_location": 23,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_json_message_codec", "target": "fl_message_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_json_message_codec.h",
+      "source_location": 43,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_json_method_codec", "target": "fl_method_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_json_method_codec.h",
+      "source_location": 23,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_standard_method_codec", "target": "fl_method_codec",
+      "relation": "implements",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_standard_method_codec.h",
+      "source_location": 24,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_standard_method_codec", "target": "fl_standard_message_codec",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_standard_method_codec.h",
+      "source_location": 54,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_plugin_registry", "target": "fl_plugin_registrar",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_plugin_registry.h",
+      "source_location": 44,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_plugin_registrar", "target": "fl_binary_messenger",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_plugin_registrar.h",
+      "source_location": 52,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_application", "target": "fl_plugin_registry",
+      "relation": "references",
+      "confidence": "EXTRACTED", "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_application.h",
+      "source_location": 41,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_application", "target": "generated_plugin_registrant_cc",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED", "confidence_score": 0.85,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_application.h",
+      "source_location": 41,
+      "weight": 0.7
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "platform_channel_architecture",
+      "label": "Flutter Platform Channel System",
+      "nodes": ["fl_binary_messenger", "fl_basic_message_channel", "fl_method_channel", "fl_event_channel", "fl_method_call", "fl_method_response"],
+      "relation": "participate_in",
+      "confidence": "INFERRED", "confidence_score": 0.9,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_basic_message_channel.h"
+    },
+    {
+      "id": "codec_type_hierarchy",
+      "label": "Flutter Linux Codec Type Hierarchy",
+      "nodes": ["fl_message_codec", "fl_method_codec", "fl_binary_codec", "fl_string_codec", "fl_standard_message_codec", "fl_json_message_codec", "fl_json_method_codec", "fl_standard_method_codec"],
+      "relation": "form",
+      "confidence": "INFERRED", "confidence_score": 0.9,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_message_codec.h"
+    },
+    {
+      "id": "plugin_registration_architecture",
+      "label": "Flutter Plugin Registration Architecture",
+      "nodes": ["fl_plugin_registry", "fl_plugin_registrar", "fl_application", "generated_plugin_registrant_cc", "generated_plugin_registrant_h"],
+      "relation": "participate_in",
+      "confidence": "INFERRED", "confidence_score": 0.85,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_plugin_registry.h"
+    }
+  ],
+  "input_tokens": 22000,
+  "output_tokens": 3200
+}

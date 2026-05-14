@@ -1,0 +1,251 @@
+{
+  "nodes": [
+    {
+      "id": "fl_texture_FlTexture",
+      "label": "FlTexture Interface",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fl_texture_gl_FlTextureGL",
+      "label": "FlTextureGL OpenGL Texture",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_gl.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fl_texture_registrar_FlTextureRegistrar",
+      "label": "FlTextureRegistrar Texture Lifecycle",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_registrar.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fl_value_FlValue",
+      "label": "FlValue Platform Channel Data Types",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_value.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fl_view_FlView",
+      "label": "FlView GTK Widget",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_view.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "flutter_linux_umbrella",
+      "label": "Flutter Linux SDK Umbrella Header",
+      "file_type": "code",
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "main_entry_point",
+      "label": "Linux Runner Main Entry Point",
+      "file_type": "code",
+      "source_file": "linux/runner/main.cc",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "my_application_MyApplication",
+      "label": "MyApplication GTK App",
+      "file_type": "code",
+      "source_file": "linux/runner/my_application.cc",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "my_application_MyApplication",
+      "target": "fl_texture_registrar_FlTextureRegistrar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/runner/my_application.cc",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_texture_gl_FlTextureGL",
+      "target": "fl_texture_FlTexture",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_gl.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_texture_registrar_FlTextureRegistrar",
+      "target": "fl_texture_FlTexture",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_registrar.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_view_FlView",
+      "target": "fl_texture_registrar_FlTextureRegistrar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_view.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_linux_umbrella",
+      "target": "fl_texture_FlTexture",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_linux_umbrella",
+      "target": "fl_texture_gl_FlTextureGL",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_linux_umbrella",
+      "target": "fl_texture_registrar_FlTextureRegistrar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_linux_umbrella",
+      "target": "fl_value_FlValue",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_linux_umbrella",
+      "target": "fl_view_FlView",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/flutter_linux.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "my_application_MyApplication",
+      "target": "flutter_linux_umbrella",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/runner/my_application.cc",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "main_entry_point",
+      "target": "my_application_MyApplication",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/runner/main.cc",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "my_application_MyApplication",
+      "target": "fl_view_FlView",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "linux/runner/my_application.cc",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fl_texture_gl_FlTextureGL",
+      "target": "fl_texture_registrar_FlTextureRegistrar",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_gl.h",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "fl_value_FlValue",
+      "target": "my_application_MyApplication",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_value.h",
+      "source_location": null,
+      "weight": 0.7
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "texture_rendering_pipeline",
+      "label": "Texture Rendering Pipeline",
+      "nodes": [
+        "fl_texture_FlTexture",
+        "fl_texture_gl_FlTextureGL",
+        "fl_texture_registrar_FlTextureRegistrar"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "linux/flutter/ephemeral/flutter_linux/fl_texture_registrar.h"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

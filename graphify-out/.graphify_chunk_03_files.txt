@@ -1,0 +1,8 @@
+/home/theodoros/Projects/sr-tuner-app/lib/src/design_system/sr_chart.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/design_system/sr_chip.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/design_system/sr_progress_bar.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/workspace/dataset_tab.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/workspace/inference_tab.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/workspace/live_metrics_tab.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/workspace/model_tab.dart
+/home/theodoros/Projects/sr-tuner-app/lib/src/workspace/training_tab.dart

@@ -1,0 +1,17 @@
+/home/theodoros/Projects/sr-tuner-app/analysis_options.yaml
+/home/theodoros/Projects/sr-tuner-app/AGENTS.md
+/home/theodoros/Projects/sr-tuner-app/openspec/config.yaml
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/checkpoint-management/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/dataset-management/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/model-management/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/proposal.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/tasks.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/specs/live-metrics-visibility/spec.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md
+/home/theodoros/Projects/sr-tuner-app/openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md

@@ -1,0 +1,9 @@
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/fl_texture.h
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/fl_texture_gl.h
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/fl_texture_registrar.h
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/fl_value.h
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/fl_view.h
+/home/theodoros/Projects/sr-tuner-app/linux/flutter/ephemeral/flutter_linux/flutter_linux.h
+/home/theodoros/Projects/sr-tuner-app/linux/runner/main.cc
+/home/theodoros/Projects/sr-tuner-app/linux/runner/my_application.cc
+/home/theodoros/Projects/sr-tuner-app/linux/runner/my_application.h

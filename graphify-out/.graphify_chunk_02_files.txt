@@ -1,0 +1,17 @@
+/home/theodoros/Projects/sr-tuner-app/backend/tests/conftest.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_checkpoints.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_classic_workspace.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_inference.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_projects.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_smoke.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_diagnostic_logging.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_correlation_errors.py
+/home/theodoros/Projects/sr-tuner-app/backend/tests/test_job_logs_readable.py
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/design-canvas.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/tweaks-panel.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/wf-b-rest.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/wf-b-shell.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/wf-b-train.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/wf-common.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/wf-start.jsx
+/home/theodoros/Projects/sr-tuner-app/design_handoff_sr_tuner/Wireframes.html

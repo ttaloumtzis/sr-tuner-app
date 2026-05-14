@@ -1,0 +1,1110 @@
+{
+  "nodes": [
+    {
+      "id": "design_system_sr_chart_SrSparkChart",
+      "label": "SrSparkChart",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_chart.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_system_sr_chip_SrChip",
+      "label": "SrChip",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_chip.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_system_sr_chip_SrChipKind",
+      "label": "SrChipKind",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_chip.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_system_sr_progress_bar_SrProgressBar",
+      "label": "SrProgressBar",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_progress_bar.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_system_sr_progress_bar_SrProgressType",
+      "label": "SrProgressType",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_progress_bar.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_system_sr_button_SrButton",
+      "label": "SrButton",
+      "file_type": "code",
+      "source_file": "lib/src/design_system/sr_button.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_theme_SrTokens",
+      "label": "SrTokens",
+      "file_type": "code",
+      "source_file": "lib/src/classic_theme.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrBanner",
+      "label": "SrBanner",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrSection",
+      "label": "SrSection",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrMetricCard",
+      "label": "SrMetricCard",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrEmptyState",
+      "label": "SrEmptyState",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrImagePlaceholder",
+      "label": "SrImagePlaceholder",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_dataset_tab_DatasetTab",
+      "label": "DatasetTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_inference_tab_InferenceTab",
+      "label": "InferenceTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_live_metrics_tab_LiveMetricsTab",
+      "label": "LiveMetricsTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_model_tab_ModelTab",
+      "label": "ModelTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_training_tab_TrainingTab",
+      "label": "TrainingTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_ProjectState",
+      "label": "ProjectState",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_DatasetSummary",
+      "label": "DatasetSummary",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_ModelSummary",
+      "label": "ModelSummary",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_RunSummary",
+      "label": "RunSummary",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_InferenceRecord",
+      "label": "InferenceRecord",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_LiveRunDetail",
+      "label": "LiveRunDetail",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_MetricsEnvelope",
+      "label": "MetricsEnvelope",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_ActiveRunStatus",
+      "label": "ActiveRunStatus",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_DatasetDetail",
+      "label": "DatasetDetail",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_CheckpointSummary",
+      "label": "CheckpointSummary",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_JobState",
+      "label": "JobState",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_client_BackendClient",
+      "label": "BackendClient",
+      "file_type": "code",
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "path_picker_PathPicker",
+      "label": "PathPicker",
+      "file_type": "code",
+      "source_file": "lib/src/path_picker.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "polling_BoundedPoller",
+      "label": "BoundedPoller",
+      "file_type": "code",
+      "source_file": "lib/src/polling.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "diagnostic_image_DiagnosticNetworkImage",
+      "label": "DiagnosticNetworkImage",
+      "file_type": "code",
+      "source_file": "lib/src/diagnostic_image.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "shared_widgets_BlockedState",
+      "label": "BlockedState",
+      "file_type": "code",
+      "source_file": "lib/src/shared_widgets.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_live_metrics_tab_LiveSnapshot",
+      "label": "_LiveSnapshot",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_live_metrics_tab_MetricChartPainter",
+      "label": "_MetricChartPainter",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_dataset_tab_DatasetCreationProgressDialog",
+      "label": "_DatasetCreationProgressDialog",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_inference_tab_InferenceBlockedTab",
+      "label": "_InferenceBlockedTab",
+      "file_type": "code",
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "design_system_sr_chart_SrSparkChart",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_chart.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_system_sr_chip_SrChip",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_chip.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_system_sr_progress_bar_SrProgressBar",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_progress_bar.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_system_sr_button_SrButton",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_button.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "classic_components_SrBanner",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "classic_components_SrSection",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "classic_components_SrImagePlaceholder",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "project_models_DatasetSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "project_models_DatasetDetail",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "project_models_JobState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "path_picker_PathPicker",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "design_system_sr_progress_bar_SrProgressBar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetCreationProgressDialog",
+      "target": "project_models_JobState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetCreationProgressDialog",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "project_models_CheckpointSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "project_models_InferenceRecord",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "design_system_sr_chip_SrChip",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "design_system_sr_button_SrButton",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "path_picker_PathPicker",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "design_system_sr_progress_bar_SrProgressBar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_inference_tab_InferenceBlockedTab",
+      "target": "workspace_inference_tab_InferenceTab",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "project_models_LiveRunDetail",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "project_models_MetricsEnvelope",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "project_models_ActiveRunStatus",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "polling_BoundedPoller",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "diagnostic_image_DiagnosticNetworkImage",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "classic_components_SrEmptyState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "classic_components_SrMetricCard",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "design_system_sr_progress_bar_SrProgressBar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "design_system_sr_chip_SrChip",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveSnapshot",
+      "target": "project_models_ActiveRunStatus",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveSnapshot",
+      "target": "project_models_LiveRunDetail",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveSnapshot",
+      "target": "project_models_MetricsEnvelope",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_MetricChartPainter",
+      "target": "project_models_MetricsEnvelope",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "project_models_ModelSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "classic_components_SrEmptyState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "classic_components_SrMetricCard",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "classic_components_SrBanner",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_model_tab_ModelTab",
+      "target": "design_system_sr_progress_bar_SrProgressBar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/model_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "backend_client_BackendClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "project_models_DatasetSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "project_models_ModelSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "project_models_RunSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "shared_widgets_BlockedState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "classic_components_SrSection",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "classic_components_SrMetricCard",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "classic_components_SrBanner",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "design_system_sr_progress_bar_SrProgressBar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_training_tab_TrainingTab",
+      "target": "design_system_sr_chip_SrChip",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/training_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_system_sr_progress_bar_SrProgressBar",
+      "target": "design_system_sr_progress_bar_SrProgressType",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_progress_bar.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_system_sr_chip_SrChip",
+      "target": "design_system_sr_chip_SrChipKind",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/design_system/sr_chip.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "classic_components_SrSection",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_live_metrics_tab_LiveMetricsTab",
+      "target": "project_models_RunSummary",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "design_system_sr_chip_SrChip",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "workspace_dataset_tab_DatasetTab",
+      "target": "classic_components_SrEmptyState",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "lib/src/workspace/dataset_tab.dart",
+      "source_location": null,
+      "weight": 0.7
+    },
+    {
+      "source": "workspace_inference_tab_InferenceTab",
+      "target": "classic_components_SrBanner",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "lib/src/workspace/inference_tab.dart",
+      "source_location": null,
+      "weight": 0.7
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "workspace_tab_architecture_pattern",
+      "label": "Workspace Tab Architecture Pattern",
+      "nodes": [
+        "workspace_dataset_tab_DatasetTab",
+        "workspace_inference_tab_InferenceTab",
+        "workspace_live_metrics_tab_LiveMetricsTab",
+        "workspace_model_tab_ModelTab",
+        "workspace_training_tab_TrainingTab",
+        "backend_client_BackendClient",
+        "project_models_ProjectState"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace"
+    },
+    {
+      "id": "live_metrics_polling_data_flow",
+      "label": "Live Metrics Polling Data Flow",
+      "nodes": [
+        "workspace_live_metrics_tab_LiveMetricsTab",
+        "polling_BoundedPoller",
+        "project_models_LiveRunDetail",
+        "project_models_MetricsEnvelope",
+        "project_models_ActiveRunStatus",
+        "workspace_live_metrics_tab_LiveSnapshot"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/workspace/live_metrics_tab.dart"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

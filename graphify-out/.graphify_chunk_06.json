@@ -1,0 +1,907 @@
+{
+  "nodes": [
+    {
+      "id": "repo_guidelines",
+      "label": "Repository Guidelines",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "flutter_analyzer_config",
+      "label": "Flutter Analyzer Configuration",
+      "file_type": "code",
+      "source_file": "analysis_options.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "openspec_workflow_config",
+      "label": "OpenSpec Workflow Configuration",
+      "file_type": "code",
+      "source_file": "openspec/config.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "build_desktop_workflow_tasks",
+      "label": "Build Desktop Workflow Tasks",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "checkpoint_mgmt_spec",
+      "label": "Checkpoint Management Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/checkpoint-management/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dataset_mgmt_spec",
+      "label": "Dataset Management Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/dataset-management/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "desktop_project_workflow_spec",
+      "label": "Desktop Project Workflow Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "inference_workflow_spec",
+      "label": "Inference Workflow Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "live_metrics_spec",
+      "label": "Live Metrics Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "model_mgmt_spec",
+      "label": "Model Management Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/model-management/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "training_runs_spec",
+      "label": "Training Runs Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "improve_live_metrics_design",
+      "label": "Improve Live Metrics Design",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "improve_live_metrics_proposal",
+      "label": "Improve Live Metrics Proposal",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/proposal.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "improve_live_metrics_tasks",
+      "label": "Improve Live Metrics Tasks",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/tasks.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "live_metrics_visibility_spec",
+      "label": "Live Metrics Visibility Spec",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/specs/live-metrics-visibility/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "debug_logging_proposal",
+      "label": "Comprehensive Debug Logging Proposal",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "debug_logging_design",
+      "label": "Comprehensive Debug Logging Design",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "flutter_frontend",
+      "label": "Flutter Desktop Frontend",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:5-7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fastapi_backend",
+      "label": "FastAPI Python Backend",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sr_tuner_project_system",
+      "label": "sr-tuner Project System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:22-36",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dataset_management_system",
+      "label": "Dataset Management System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/dataset-management/spec.md",
+      "source_location": "spec.md:3-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "model_management_system",
+      "label": "Model Management System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/model-management/spec.md",
+      "source_location": "spec.md:3-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "training_run_system",
+      "label": "Training Run System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:3-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "checkpoint_management_system",
+      "label": "Checkpoint Management System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/checkpoint-management/spec.md",
+      "source_location": "spec.md:3-5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "inference_system",
+      "label": "Inference Workflow System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md",
+      "source_location": "spec.md:3-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "live_metrics_system",
+      "label": "Live Metrics Display System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md",
+      "source_location": "spec.md:3-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "shared_job_system",
+      "label": "Shared Backend Job Framework",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:127-145",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "debug_observability_system",
+      "label": "Debug Observability System",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:7-15",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "validation_preview_4way",
+      "label": "4-Way Validation Preview Grid",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:68-78",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "split_metric_charts",
+      "label": "Split Metric Charts (Loss/PSNR/SSIM)",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:54-58",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "correlation_id_tracing",
+      "label": "Correlation ID Tracing",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:30-33",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "structured_logging_schema",
+      "label": "Structured Logging Schema",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:25-28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "training_lifecycle_states",
+      "label": "Training Run Lifecycle States",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:35-48",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "job_to_run_state_mapping",
+      "label": "Job-to-Run State Mapping",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:50-71",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "repo_guidelines",
+      "target": "flutter_frontend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:5-7",
+      "weight": 1.0
+    },
+    {
+      "source": "repo_guidelines",
+      "target": "fastapi_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:6",
+      "weight": 1.0
+    },
+    {
+      "source": "repo_guidelines",
+      "target": "flutter_analyzer_config",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:14",
+      "weight": 1.0
+    },
+    {
+      "source": "repo_guidelines",
+      "target": "openspec_workflow_config",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:7",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "checkpoint_mgmt_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:94-107",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "dataset_mgmt_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:39-54",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "desktop_project_workflow_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:25-37",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "inference_workflow_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:109-119",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "live_metrics_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:84-92",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "model_mgmt_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:56-65",
+      "weight": 1.0
+    },
+    {
+      "source": "build_desktop_workflow_tasks",
+      "target": "training_runs_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md",
+      "source_location": "tasks.md:67-82",
+      "weight": 1.0
+    },
+    {
+      "source": "improve_live_metrics_design",
+      "target": "live_metrics_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:3-22",
+      "weight": 1.0
+    },
+    {
+      "source": "improve_live_metrics_proposal",
+      "target": "live_metrics_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/proposal.md",
+      "source_location": "proposal.md:3-7",
+      "weight": 1.0
+    },
+    {
+      "source": "improve_live_metrics_design",
+      "target": "split_metric_charts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:54-58",
+      "weight": 1.0
+    },
+    {
+      "source": "improve_live_metrics_design",
+      "target": "validation_preview_4way",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:68-78",
+      "weight": 1.0
+    },
+    {
+      "source": "live_metrics_visibility_spec",
+      "target": "split_metric_charts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/specs/live-metrics-visibility/spec.md",
+      "source_location": "spec.md:3-13",
+      "weight": 1.0
+    },
+    {
+      "source": "live_metrics_visibility_spec",
+      "target": "validation_preview_4way",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/specs/live-metrics-visibility/spec.md",
+      "source_location": "spec.md:25-35",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_proposal",
+      "target": "debug_observability_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md",
+      "source_location": "proposal.md:20-21",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_design",
+      "target": "debug_observability_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:3-4",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_design",
+      "target": "correlation_id_tracing",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:30-33",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_design",
+      "target": "structured_logging_schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:25-28",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_proposal",
+      "target": "inference_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md",
+      "source_location": "proposal.md:23-24",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_proposal",
+      "target": "live_metrics_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md",
+      "source_location": "proposal.md:24-25",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_proposal",
+      "target": "sr_tuner_project_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/proposal.md",
+      "source_location": "proposal.md:25-26",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_design",
+      "target": "shared_job_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:50-53",
+      "weight": 1.0
+    },
+    {
+      "source": "training_runs_spec",
+      "target": "training_lifecycle_states",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:35-48",
+      "weight": 1.0
+    },
+    {
+      "source": "training_runs_spec",
+      "target": "job_to_run_state_mapping",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:50-71",
+      "weight": 1.0
+    },
+    {
+      "source": "training_run_system",
+      "target": "training_lifecycle_states",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:35-48",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_job_system",
+      "target": "job_to_run_state_mapping",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/training-runs/spec.md",
+      "source_location": "spec.md:50-71",
+      "weight": 1.0
+    },
+    {
+      "source": "training_run_system",
+      "target": "dataset_management_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/dataset-management/spec.md",
+      "source_location": "spec.md:3-9",
+      "weight": 1.0
+    },
+    {
+      "source": "training_run_system",
+      "target": "model_management_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/model-management/spec.md",
+      "source_location": "spec.md:68-73",
+      "weight": 1.0
+    },
+    {
+      "source": "checkpoint_management_system",
+      "target": "training_run_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/checkpoint-management/spec.md",
+      "source_location": "spec.md:28-38",
+      "weight": 1.0
+    },
+    {
+      "source": "inference_system",
+      "target": "checkpoint_management_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md",
+      "source_location": "spec.md:17-23",
+      "weight": 1.0
+    },
+    {
+      "source": "live_metrics_system",
+      "target": "training_run_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md",
+      "source_location": "spec.md:3-9",
+      "weight": 1.0
+    },
+    {
+      "source": "validation_preview_4way",
+      "target": "live_metrics_system",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:68-78",
+      "weight": 1.0
+    },
+    {
+      "source": "split_metric_charts",
+      "target": "live_metrics_system",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:54-58",
+      "weight": 1.0
+    },
+    {
+      "source": "correlation_id_tracing",
+      "target": "debug_observability_system",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:30-33",
+      "weight": 1.0
+    },
+    {
+      "source": "structured_logging_schema",
+      "target": "debug_observability_system",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:25-28",
+      "weight": 1.0
+    },
+    {
+      "source": "dataset_management_system",
+      "target": "sr_tuner_project_system",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:62-68",
+      "weight": 1.0
+    },
+    {
+      "source": "model_management_system",
+      "target": "sr_tuner_project_system",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:62-68",
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_frontend",
+      "target": "sr_tuner_project_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:3-9",
+      "weight": 1.0
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "sr_tuner_project_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:10-19",
+      "weight": 1.0
+    },
+    {
+      "source": "flutter_frontend",
+      "target": "fastapi_backend",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "AGENTS.md",
+      "source_location": "AGENTS.md:5-6",
+      "weight": 1.0
+    },
+    {
+      "source": "live_metrics_system",
+      "target": "shared_job_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/live-metrics/spec.md",
+      "source_location": "spec.md:3-9",
+      "weight": 1.0
+    },
+    {
+      "source": "inference_system",
+      "target": "shared_job_system",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/inference-workflow/spec.md",
+      "source_location": "spec.md:3-9",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_job_system",
+      "target": "fastapi_backend",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/specs/desktop-project-workflow/spec.md",
+      "source_location": "spec.md:127-145",
+      "weight": 1.0
+    },
+    {
+      "source": "improve_live_metrics_design",
+      "target": "build_desktop_workflow_tasks",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md",
+      "source_location": "design.md:3-4",
+      "weight": 1.0
+    },
+    {
+      "source": "debug_logging_design",
+      "target": "build_desktop_workflow_tasks",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md",
+      "source_location": "design.md:3-4",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "sr_tuner_core_workflow",
+      "label": "sr-tuner Core Training and Inference Workflow",
+      "nodes": [
+        "dataset_management_system",
+        "model_management_system",
+        "training_run_system",
+        "checkpoint_management_system",
+        "inference_system",
+        "live_metrics_system"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-build-sr-tuner-desktop-workflow/tasks.md"
+    },
+    {
+      "id": "live_metrics_visibility_improvement",
+      "label": "Live Metrics Visibility Improvement Components",
+      "nodes": [
+        "split_metric_charts",
+        "validation_preview_4way",
+        "live_metrics_visibility_spec",
+        "improve_live_metrics_tasks"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-11-improve-live-metrics-visibility/design.md"
+    },
+    {
+      "id": "debug_observability_foundation",
+      "label": "Debug Observability Foundation Blocks",
+      "nodes": [
+        "debug_observability_system",
+        "structured_logging_schema",
+        "correlation_id_tracing"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "openspec/changes/archive/2026-05-14-comprehensive-debug-logging/design.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

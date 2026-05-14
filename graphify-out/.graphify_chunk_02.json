@@ -1,0 +1,439 @@
+{
+  "nodes": [
+    {
+      "id": "conftest_fixture_paired_dataset_4x",
+      "label": "conftest fixture_paired_dataset_4x",
+      "file_type": "code",
+      "source_file": "backend/tests/conftest.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_checkpoints_checkpoint_crud",
+      "label": "test_checkpoints: checkpoint CRUD & markers",
+      "file_type": "code",
+      "source_file": "backend/tests/test_checkpoints.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_inference_inference_pipeline",
+      "label": "test_inference: inference pipeline tests",
+      "file_type": "code",
+      "source_file": "backend/tests/test_inference.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_classic_workspace_workspace_prefs",
+      "label": "test_classic_workspace: workspace & dashboard tests",
+      "file_type": "code",
+      "source_file": "backend/tests/test_classic_workspace.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_projects_project_lifecycle",
+      "label": "test_projects: project lifecycle tests",
+      "file_type": "code",
+      "source_file": "backend/tests/test_projects.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_smoke_end_to_end_flow",
+      "label": "test_smoke: end-to-end & project reopen",
+      "file_type": "code",
+      "source_file": "backend/tests/test_smoke.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_diagnostic_logging_logging_schema",
+      "label": "test_diagnostic_logging: logging schema & redaction",
+      "file_type": "code",
+      "source_file": "backend/tests/test_diagnostic_logging.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_correlation_errors_correlation",
+      "label": "test_correlation_errors: correlation ID in errors",
+      "file_type": "code",
+      "source_file": "backend/tests/test_correlation_errors.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_job_logs_readable_job_logs",
+      "label": "test_job_logs_readable: job log formatting",
+      "file_type": "code",
+      "source_file": "backend/tests/test_job_logs_readable.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_canvas_main",
+      "label": "DesignCanvas: Figma-like canvas component",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/design-canvas.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tweaks_panel_reusable",
+      "label": "TweaksPanel: interactive prototyping controls",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/tweaks-panel.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wf_common_primitives",
+      "label": "wf-common: shared UI primitives (Icon, Win, Btn, etc.)",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/wf-common.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wf_b_shell_chrome",
+      "label": "wf-b-shell: Shell chrome + Overview + Dataset tabs",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/wf-b-shell.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wf_b_train_components",
+      "label": "wf-b-train: Model + Training + Live tabs",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/wf-b-train.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wf_b_rest_components",
+      "label": "wf-b-rest: Checkpoints + Inference tabs",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/wf-b-rest.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wf_start_screen",
+      "label": "wf-start: Start screen / project picker",
+      "file_type": "code",
+      "source_file": "design_handoff_sr_tuner/wf-start.jsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wireframes_html",
+      "label": "Wireframes.html: main orchestrating document",
+      "file_type": "document",
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "test_smoke_end_to_end_flow",
+      "target": "conftest_fixture_paired_dataset_4x",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/tests/test_smoke.py",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_b_shell_chrome",
+      "target": "wf_common_primitives",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-b-shell.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_b_train_components",
+      "target": "wf_common_primitives",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-b-train.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_b_rest_components",
+      "target": "wf_common_primitives",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-b-rest.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_start_screen",
+      "target": "wf_common_primitives",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-start.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_b_train_components",
+      "target": "wf_b_shell_chrome",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-b-train.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wf_b_rest_components",
+      "target": "wf_b_shell_chrome",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/wf-b-rest.jsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "wf_b_shell_chrome",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "wf_b_train_components",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "wf_b_rest_components",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "wf_start_screen",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "wf_common_primitives",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "design_canvas_main",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wireframes_html",
+      "target": "tweaks_panel_reusable",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_checkpoints_checkpoint_crud",
+      "target": "test_inference_inference_pipeline",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "backend/tests/test_checkpoints.py",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "test_diagnostic_logging_logging_schema",
+      "target": "test_correlation_errors_correlation",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "backend/tests/test_diagnostic_logging.py",
+      "source_location": null,
+      "weight": 0.9
+    },
+    {
+      "source": "test_diagnostic_logging_logging_schema",
+      "target": "test_job_logs_readable_job_logs",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "backend/tests/test_diagnostic_logging.py",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "test_projects_project_lifecycle",
+      "target": "test_smoke_end_to_end_flow",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "backend/tests/test_projects.py",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "test_classic_workspace_workspace_prefs",
+      "target": "test_projects_project_lifecycle",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "backend/tests/test_classic_workspace.py",
+      "source_location": null,
+      "weight": 0.7
+    },
+    {
+      "source": "wf_b_shell_chrome",
+      "target": "wf_start_screen",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "design_handoff_sr_tuner/wf-b-shell.jsx",
+      "source_location": null,
+      "weight": 0.7
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "design_wireframe_shell_pattern",
+      "label": "Shell composition pattern for wireframes",
+      "nodes": [
+        "wf_b_shell_chrome",
+        "wf_common_primitives",
+        "wf_b_rest_components",
+        "wf_b_train_components",
+        "wf_start_screen"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design_handoff_sr_tuner/Wireframes.html"
+    },
+    {
+      "id": "test_logging_correlation_infrastructure",
+      "label": "Diagnostic logging and correlation ID infrastructure",
+      "nodes": [
+        "test_diagnostic_logging_logging_schema",
+        "test_correlation_errors_correlation",
+        "test_job_logs_readable_job_logs"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "backend/tests/test_diagnostic_logging.py"
+    },
+    {
+      "id": "test_project_lifecycle_suite",
+      "label": "Project lifecycle test suite spanning multiple test files",
+      "nodes": [
+        "test_classic_workspace_workspace_prefs",
+        "test_projects_project_lifecycle",
+        "test_smoke_end_to_end_flow",
+        "conftest_fixture_paired_dataset_4x"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "backend/tests/test_smoke.py"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

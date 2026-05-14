@@ -11,15 +11,15 @@ The system SHALL show a Flutter desktop startup screen with the `sr-tuner` app n
 - **THEN** the app displays the app name and create/open project actions before entering the workspace
 
 ### Requirement: Backend process lifecycle
-The system SHALL start the local Python FastAPI backend automatically when the desktop app needs project functionality and SHALL wait for a healthy backend before issuing API requests.
+The system SHALL start the local Python FastAPI backend automatically when the desktop app needs project functionality and SHALL wait for a healthy backend before issuing API requests, while logging structured startup diagnostics including launch arguments policy, health-check attempts, bounded process output tail, and failure classifications.
 
 #### Scenario: Backend starts successfully
 - **WHEN** the user creates or opens a project
-- **THEN** the Flutter app starts the backend process, confirms the health endpoint is ready, and continues to the workspace
+- **THEN** the Flutter app starts the backend process, confirms the health endpoint is ready, continues to the workspace, and records correlated startup lifecycle logs
 
 #### Scenario: Backend fails to start
 - **WHEN** the backend process cannot become healthy
-- **THEN** the Flutter app displays a recoverable error with backend status details
+- **THEN** the Flutter app displays a recoverable error with the most recent backend process output, backend status details, and records structured failure logs with categorized root-cause hints
 
 ### Requirement: Project create and open
 The system SHALL allow users to create new project folders and open existing project folders that contain a valid `sr-tuner.project.json` file.
@@ -106,11 +106,11 @@ The system SHALL assign stable opaque IDs to datasets, models, runs, checkpoints
 - **THEN** the backend keeps IDs distinct and either rejects the duplicate name with a clear error or generates a unique folder-safe slug according to that object's workflow
 
 ### Requirement: Standard API errors
-The system SHALL return local API errors in a consistent structured shape that the Flutter UI can render as actionable messages.
+The system SHALL return local API errors in a consistent structured shape that the Flutter UI can render as actionable messages, and SHALL include correlation identifiers that map each error to frontend request logs and backend diagnostic events.
 
 #### Scenario: API request fails
 - **WHEN** the backend rejects a request
-- **THEN** it returns an error object containing a stable code, human-readable message, optional details, and whether the error is recoverable
+- **THEN** it returns an error object containing a stable code, human-readable message, optional details, whether the error is recoverable, and a correlation identifier for diagnostic tracing
 
 ### Requirement: Local API request protection
 The system SHALL bind the local backend to loopback and SHALL protect project-mutating API requests with a per-session token once the frontend starts or connects to the backend.

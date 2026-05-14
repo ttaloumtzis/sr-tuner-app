@@ -1,0 +1,959 @@
+{
+  "nodes": [
+    {
+      "id": "main_entry",
+      "label": "main() Entry Point",
+      "file_type": "code",
+      "source_file": "lib/main.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "app_SrTunerApp",
+      "label": "SrTunerApp Widget",
+      "file_type": "code",
+      "source_file": "lib/src/app.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "app_config_AppConfig",
+      "label": "AppConfig Constants and URI Builder",
+      "file_type": "code",
+      "source_file": "lib/src/app_config.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_theme_ClassicTheme",
+      "label": "ClassicTheme ThemeData Builder",
+      "file_type": "code",
+      "source_file": "lib/src/classic_theme.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_theme_SrTokens",
+      "label": "SrTokens ThemeExtension Color and Spacing Tokens",
+      "file_type": "code",
+      "source_file": "lib/src/classic_theme.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_controller_ProjectController",
+      "label": "ProjectController StatefulWidget Orchestrator",
+      "file_type": "code",
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_client_BackendClient",
+      "label": "BackendClient HTTP API Client",
+      "file_type": "code",
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_client_ApiException",
+      "label": "ApiException Error Type",
+      "file_type": "code",
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_process_BackendProcess",
+      "label": "BackendProcess Lifecycle Manager",
+      "file_type": "code",
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "backend_process_BackendLauncherMode",
+      "label": "BackendLauncherMode Enum",
+      "file_type": "code",
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrSection",
+      "label": "SrSection Card Layout Component",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrBanner",
+      "label": "SrBanner Severity Banner Component",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrChip",
+      "label": "SrChip Label Badge Component",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrMetricCard",
+      "label": "SrMetricCard Metric Display Component",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrProgressBar",
+      "label": "SrProgressBar Animated Progress Component",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrEmptyState",
+      "label": "SrEmptyState Empty State Placeholder",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrSparkline",
+      "label": "SrSparkline Metric Sparkline Chart",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "classic_components_SrCompareViewer",
+      "label": "SrCompareViewer Before/After Image Comparison",
+      "file_type": "code",
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "shared_widgets_ApiErrorBanner",
+      "label": "ApiErrorBanner Widget",
+      "file_type": "code",
+      "source_file": "lib/src/shared_widgets.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "shared_widgets_JobProgressPanel",
+      "label": "JobProgressPanel Widget",
+      "file_type": "code",
+      "source_file": "lib/src/shared_widgets.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "startup_screen_StartupScreen",
+      "label": "StartupScreen Project Landing Page",
+      "file_type": "code",
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "path_picker_PathPicker",
+      "label": "PathPicker Native Folder/File Dialog",
+      "file_type": "code",
+      "source_file": "lib/src/path_picker.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "workspace_store_WorkspaceStore",
+      "label": "WorkspaceStore Last-Project Persistence",
+      "file_type": "code",
+      "source_file": "lib/src/workspace_store.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logging_schema_LogLevel",
+      "label": "LogLevel Enum and Filtering",
+      "file_type": "code",
+      "source_file": "lib/src/logging_schema.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logging_schema_EventNames",
+      "label": "EventNames String Constants",
+      "file_type": "code",
+      "source_file": "lib/src/logging_schema.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logging_schema_Components",
+      "label": "Components String Constants",
+      "file_type": "code",
+      "source_file": "lib/src/logging_schema.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logging_schema_LogEvent",
+      "label": "LogEvent Structured Event Model",
+      "file_type": "code",
+      "source_file": "lib/src/logging_schema.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "diagnostic_logger_DiagnosticLogger",
+      "label": "DiagnosticLogger Structured Logger",
+      "file_type": "code",
+      "source_file": "lib/src/diagnostic_logger.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cause_codes_CauseCodes",
+      "label": "CauseCodes Error Cause String Constants",
+      "file_type": "code",
+      "source_file": "lib/src/cause_codes.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "debug_session_DebugSession",
+      "label": "DebugSession Timed Debug Logging",
+      "file_type": "code",
+      "source_file": "lib/src/debug_session.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "diagnostic_image_DiagnosticNetworkImage",
+      "label": "DiagnosticNetworkImage Logging Image Widget",
+      "file_type": "code",
+      "source_file": "lib/src/diagnostic_image.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "polling_BoundedPoller",
+      "label": "BoundedPoller Generic Polling Utility",
+      "file_type": "code",
+      "source_file": "lib/src/polling.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_ProjectState",
+      "label": "ProjectState Project Data Model",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_DashboardSummary",
+      "label": "DashboardSummary Dashboard Data Model",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_ActiveRunStatus",
+      "label": "ActiveRunStatus Live Run Status Model",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_models_TrainingEstimate",
+      "label": "TrainingEstimate Training Cost Model",
+      "file_type": "code",
+      "source_file": "lib/src/project_models.dart",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "main_entry",
+      "target": "app_SrTunerApp",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/main.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_SrTunerApp",
+      "target": "app_config_AppConfig",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/app.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_SrTunerApp",
+      "target": "classic_theme_ClassicTheme",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/app.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_SrTunerApp",
+      "target": "project_controller_ProjectController",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/app.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "backend_client_BackendClient",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "backend_process_BackendProcess",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "workspace_store_WorkspaceStore",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "startup_screen_StartupScreen",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_process_BackendProcess",
+      "target": "backend_client_BackendClient",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_process_BackendProcess",
+      "target": "app_config_AppConfig",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_process_BackendProcess",
+      "target": "cause_codes_CauseCodes",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_process_BackendProcess",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_process.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "app_config_AppConfig",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "backend_client_ApiException",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "project_models_ProjectState",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "project_models_DashboardSummary",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "project_models_ActiveRunStatus",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "project_models_TrainingEstimate",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "app_config_AppConfig",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "classic_components_SrSection",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "classic_components_SrChip",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "classic_components_SrBanner",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "classic_components_SrProgressBar",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "classic_components_SrEmptyState",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "path_picker_PathPicker",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrSection",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrBanner",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrChip",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrMetricCard",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrProgressBar",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrEmptyState",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrSparkline",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "classic_components_SrCompareViewer",
+      "target": "classic_theme_SrTokens",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "shared_widgets_ApiErrorBanner",
+      "target": "backend_client_ApiException",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/shared_widgets.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "shared_widgets_JobProgressPanel",
+      "target": "project_models_ProjectState",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/shared_widgets.dart",
+      "source_location": null,
+      "weight": 0.8
+    },
+    {
+      "source": "diagnostic_logger_DiagnosticLogger",
+      "target": "logging_schema_LogLevel",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/diagnostic_logger.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "diagnostic_logger_DiagnosticLogger",
+      "target": "logging_schema_EventNames",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/diagnostic_logger.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "diagnostic_logger_DiagnosticLogger",
+      "target": "logging_schema_LogEvent",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/diagnostic_logger.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "logging_schema_LogEvent",
+      "target": "logging_schema_LogLevel",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/logging_schema.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "polling_BoundedPoller",
+      "target": "cause_codes_CauseCodes",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/polling.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "polling_BoundedPoller",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/polling.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "debug_session_DebugSession",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/debug_session.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "diagnostic_image_DiagnosticNetworkImage",
+      "target": "diagnostic_logger_DiagnosticLogger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/diagnostic_image.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "backend_client_BackendClient",
+      "target": "logging_schema_EventNames",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/backend_client.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "startup_screen_StartupScreen",
+      "target": "backend_client_ApiException",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/startup_screen.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "logging_schema_EventNames",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "project_controller_ProjectController",
+      "target": "logging_schema_Components",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "backend_communication_layer",
+      "label": "Backend Communication Layer",
+      "nodes": [
+        "backend_client_BackendClient",
+        "backend_process_BackendProcess",
+        "app_config_AppConfig",
+        "backend_client_ApiException",
+        "project_controller_ProjectController"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/project_controller.dart"
+    },
+    {
+      "id": "logging_infrastructure",
+      "label": "Logging and Diagnostics Infrastructure",
+      "nodes": [
+        "diagnostic_logger_DiagnosticLogger",
+        "logging_schema_LogLevel",
+        "logging_schema_EventNames",
+        "logging_schema_Components",
+        "logging_schema_LogEvent",
+        "cause_codes_CauseCodes",
+        "debug_session_DebugSession"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/diagnostic_logger.dart"
+    },
+    {
+      "id": "ui_component_library",
+      "label": "Shared UI Component Library",
+      "nodes": [
+        "classic_components_SrSection",
+        "classic_components_SrBanner",
+        "classic_components_SrChip",
+        "classic_components_SrMetricCard",
+        "classic_components_SrProgressBar",
+        "classic_components_SrEmptyState",
+        "classic_components_SrSparkline",
+        "classic_components_SrCompareViewer",
+        "classic_theme_SrTokens",
+        "shared_widgets_ApiErrorBanner",
+        "shared_widgets_JobProgressPanel"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/src/classic_components.dart"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}
