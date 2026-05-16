@@ -1,0 +1,14 @@
+name: bug-fixes-audit
+title: Full-Stack Bug Fixes — Audit 2026-05-16
+status: implemented
+created: 2026-05-16
+affects:
+  - backend/src/sr_tuner_api/main.py
+  - backend/src/sr_tuner_api/runs.py
+  - backend/src/sr_tuner_api/inference.py
+  - backend/src/sr_tuner_api/models.py
+  - lib/src/backend_client.dart
+  - lib/src/workspace/checkpoints_tab.dart
+  - lib/src/workspace/inference_tab.dart
+  - lib/src/workspace/training_tab.dart
+  - lib/src/workspace/model_tab.dart

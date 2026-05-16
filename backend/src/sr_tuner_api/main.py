@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import signal
 import time
@@ -35,6 +36,7 @@ from .checkpoints import (
     derive_project_checkpoints,
     export_checkpoint_onnx,
     export_checkpoint_pth,
+    extract_and_save_core_weights,
     list_run_checkpoints,
     onnx_readiness,
     save_checkpoint,
@@ -58,6 +60,7 @@ from .classic_workspace import (
     dashboard_summary,
     dataset_detail,
     inference_inspector,
+    forget_all_recent_projects,
     forget_recent_project,
     list_recent_projects,
     live_detail,
@@ -107,11 +110,13 @@ from .models import (
     CompatibilityResponse,
     CreateModelRequest,
     ModelObject,
+    TrainHistoryEntry,
     UpdateModelRequest,
     check_dataset_model_compatibility,
     create_model,
     default_model_config,
     delete_model,
+    duplicate_model,
     get_model,
     list_models,
     update_model,
@@ -230,15 +235,38 @@ def _session_project_path(project_id: str) -> Path:
     return root
 
 
+_training_threads: dict[str, Thread] = {}
+
+
 def _start_training_worker(project_root: Path, run_id: str, job_id: str) -> None:
-    Thread(
-        target=_training_worker,
-        args=(project_root, run_id, job_id),
-        daemon=True,
-    ).start()
+    t = Thread(target=_training_worker, args=(project_root, run_id, job_id), daemon=True)
+    t.start()
+    _training_threads[job_id] = t
+
+
+def _interrupt_training_thread(job_id: str) -> None:
+    thread = _training_threads.pop(job_id, None)
+    if thread is None or not thread.is_alive():
+        return
+    tid = thread.ident
+    if tid is None:
+        return
+    ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        ctypes.c_ulong(tid),
+        ctypes.py_object(SystemExit),
+    )
 
 
 def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
+    try:
+        _training_worker_impl(project_root, run_id, job_id)
+    except SystemExit:
+        _set_run_state(project_root, run_id, "stopped")
+    finally:
+        _training_threads.pop(job_id, None)
+
+
+def _training_worker_impl(project_root: Path, run_id: str, job_id: str) -> None:
     import math
 
     import torch
@@ -249,10 +277,17 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     dataset_raw = next((raw for raw in project.datasets if raw.get("id") == run.dataset_id), None)
     model_raw = next((raw for raw in project.models if raw.get("id") == run.model_id), None)
     if raw_run is None or dataset_raw is None or model_raw is None:
-        raise ApiError(404, "training_context_missing", "Training context was not found.", details={"run_id": run_id})
+        job = job_store.get(job_id)
+        job.status = "failed"
+        job.finished_at = utc_now_iso()
+        job.error = JobError(code="training_context_missing", message="Training context was not found (run, dataset, or model missing).")
+        job_store.put(job)
+        _set_run_state(project_root, run_id, "failed")
+        return
 
     dataset = DatasetObject.model_validate(dataset_raw)
     model = ModelObject.model_validate(model_raw)
+    dataset_scale = run.metadata.get("dataset_scale") or dataset.validated_scale or dataset.scale
 
     train_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.train_indexes or None)
     if len(train_dataset) == 0:
@@ -263,11 +298,37 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
 
     device = torch.device(run.settings.device)
     model_impl = build_internal_sr_model(
-        scale=model.scale,
+        scale=dataset_scale,
         num_features=model.num_features,
         num_blocks=model.num_blocks,
     ).to(device)
-    optimizer = torch.optim.Adam(model_impl.parameters(), lr=model.optimizer.lr)
+
+    core_source = run.settings.source_core_weights_path
+    if core_source is None and model.trained_core_weights_path and model.status == "trained":
+        core_source = model.trained_core_weights_path
+    if core_source is None and run.lineage.fine_tune_source_checkpoint_id:
+        ckpt_id = run.lineage.fine_tune_source_checkpoint_id
+        for raw in project.runs:
+            for c in raw.get("checkpoints", []):
+                if c.get("id") == ckpt_id:
+                    ckpt_run_id = raw.get("id")
+                    core_source = f"models/{run.model_id}/core_weights/{ckpt_run_id}_core.pth"
+                    break
+    if core_source:
+        core_path = Path(core_source)
+        if not core_path.is_absolute():
+            core_path = project_root / core_path
+        if core_path.exists():
+            core_state = torch.load(core_path, map_location="cpu", weights_only=False)
+            model_impl.body.load_state_dict(core_state)
+
+    lr = run.settings.learning_rate if run.settings.learning_rate is not None else model.optimizer.lr
+    optimizer = torch.optim.Adam(model_impl.parameters(), lr=lr)
+    use_amp = run.settings.precision == "mixed" and device.type in ("cuda", "rocm")
+    if use_amp:
+        scaler = torch.amp.GradScaler()
+    else:
+        scaler = None
     scheduler = _build_scheduler(optimizer, run.settings.scheduler.type, run.settings.epochs)
 
     started_at = time.monotonic()
@@ -320,12 +381,19 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                 lr_image = torch.stack([sample["lr"] for sample in samples]).to(device)
                 hr_image = torch.stack([sample["hr"] for sample in samples]).to(device)
 
-                prediction = model_impl(lr_image)
-                loss, components = _combined_training_loss(prediction, hr_image, run.settings.loss_weights)
-
                 optimizer.zero_grad(set_to_none=True)
-                loss.backward()
-                optimizer.step()
+                if use_amp:
+                    with torch.amp.autocast(device_type=device.type):
+                        prediction = model_impl(lr_image)
+                        loss, components = _combined_training_loss(prediction, hr_image, run.settings.loss_weights)
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    prediction = model_impl(lr_image)
+                    loss, components = _combined_training_loss(prediction, hr_image, run.settings.loss_weights)
+                    loss.backward()
+                    optimizer.step()
 
                 epoch_loss += float(loss.item())
                 for key, value in components.items():
@@ -457,7 +525,7 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
                         "num_blocks": model.num_blocks,
                     },
                     dataset_id=dataset.id,
-                    scale=model.scale,
+                    scale=dataset_scale,
                     architecture=model.architecture,
                 )
 
@@ -469,14 +537,113 @@ def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
         job.logs = [*job.logs[-49:], f"Training completed in {time.monotonic() - started_at:.1f}s."]
         job_store.put(job)
         _set_run_state(project_root, run_id, "completed")
+        _extract_core_weights_after_training(project_root, run_id)
+        try:
+            _archive_run_to_model(project_root, run_id, dataset, dataset_scale)
+        except Exception as arc_exc:
+            import traceback
+            job = job_store.get(job_id)
+            job.logs = [*job.logs[-49:], f"Archive warning: {arc_exc}", traceback.format_exc()]
+            job_store.put(job)
     except Exception as exc:
+        import traceback
         job = job_store.get(job_id)
         job.status = "failed"
         job.finished_at = utc_now_iso()
         job.error = JobError(code="training_failed", message=str(exc))
-        job.logs = [*job.logs[-49:], str(exc)]
+        job.logs = [*job.logs[-49:], str(exc), traceback.format_exc()]
         job_store.put(job)
         _set_run_state(project_root, run_id, "failed")
+
+
+def _extract_core_weights_after_training(project_root: Path, run_id: str) -> None:
+    """After successful training, extract core weights from the best checkpoint and store on the model."""
+    project = open_project(project_root)
+    raw_run = next((r for r in project.runs if r.get("id") == run_id), None)
+    if raw_run is None:
+        return
+    model_id = raw_run.get("model_id")
+    if model_id is None:
+        return
+    checkpoints = raw_run.get("checkpoints", [])
+    if not checkpoints:
+        return
+    best = None
+    for c in checkpoints:
+        if "best_psnr" in c.get("tags", []):
+            best = c
+            break
+    if best is None:
+        sorted_ckpts = sorted(checkpoints, key=lambda c: c.get("saved_at", ""), reverse=True)
+        best = sorted_ckpts[0] if sorted_ckpts else None
+    if best is None:
+        return
+    ckpt_path = Path(best.get("path", ""))
+    if not ckpt_path.is_absolute():
+        ckpt_path = project_root / ckpt_path
+    if not ckpt_path.exists():
+        return
+    try:
+        stored = extract_and_save_core_weights(ckpt_path, project_root, model_id, run_id)
+        for idx, raw_model in enumerate(project.models):
+            if raw_model.get("id") == model_id:
+                raw_model["trained_core_weights_path"] = stored
+                raw_model["status"] = "trained"
+                raw_model["updated_at"] = utc_now_iso()
+                project.models[idx] = raw_model
+                break
+        write_project(project)
+    except Exception:
+        pass
+
+
+def _archive_run_to_model(project_root: Path, run_id: str, dataset: DatasetObject, dataset_scale: int) -> None:
+    """After successful training, archive run data as train_history on the model.
+    The run itself remains visible in completed state."""
+    project = open_project(project_root)
+    raw_run = next((r for r in project.runs if r.get("id") == run_id), None)
+    if raw_run is None:
+        return
+    model_id = raw_run.get("model_id")
+    if model_id is None:
+        return
+    checkpoints = raw_run.get("checkpoints", [])
+    best_id = ""
+    best_metrics: dict[str, float] = {}
+    for c in checkpoints:
+        if "best_psnr" in c.get("tags", []):
+            best_id = c.get("id", "")
+            best_metrics = {k: float(v) for k, v in c.get("metrics", {}).items() if isinstance(v, (int, float))}
+            break
+    if not best_id and checkpoints:
+        latest = max(checkpoints, key=lambda c: c.get("saved_at", ""))
+        best_id = latest.get("id", "")
+        best_metrics = {k: float(v) for k, v in latest.get("metrics", {}).items() if isinstance(v, (int, float))}
+    raw_settings = raw_run.get("settings", {})
+    raw_lineage = raw_run.get("lineage", {})
+    entry = TrainHistoryEntry(
+        session_id=run_id,
+        dataset_id=dataset.id,
+        dataset_name=dataset.name,
+        scale=dataset_scale,
+        started_at=raw_run.get("created_at", ""),
+        completed_at=utc_now_iso(),
+        epochs=raw_settings.get("epochs", 0),
+        best_metrics=best_metrics,
+        checkpoints=checkpoints,
+        best_checkpoint_id=best_id,
+        fine_tuned_from_checkpoint_id=raw_lineage.get("fine_tune_source_checkpoint_id") or "",
+        fine_tuned_from_core_weights_path=raw_settings.get("source_core_weights_path") or "",
+    )
+    for idx, raw_model in enumerate(project.models):
+        if raw_model.get("id") == model_id:
+            history = raw_model.get("train_history", [])
+            history.append(entry.model_dump())
+            raw_model["train_history"] = history
+            raw_model["updated_at"] = utc_now_iso()
+            project.models[idx] = raw_model
+            break
+    write_project(project)
 
 
 def _build_scheduler(optimizer, scheduler_type: str, epochs: int):
@@ -659,6 +826,13 @@ def forget_recent_project_endpoint(
     _token: None = Depends(require_session_token),
 ) -> RecentProjectsResponse:
     return forget_recent_project(path)
+
+
+@app.delete("/projects/recent/all", response_model=RecentProjectsResponse)
+def forget_all_recent_projects_endpoint(
+    _token: None = Depends(require_session_token),
+) -> RecentProjectsResponse:
+    return forget_all_recent_projects()
 
 
 @app.post("/projects/recent/open", response_model=ProjectResponse)
@@ -863,10 +1037,11 @@ def save_template_as_model_endpoint(
     project_id: str,
     template_id: str,
     name: str,
-    scale: int = 4,
+    num_features: int = 32,
+    num_blocks: int = 4,
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
-    project = save_template_as_model(_session_project_path(project_id), template_id, name, scale)
+    project = save_template_as_model(_session_project_path(project_id), template_id, name, num_features=num_features, num_blocks=num_blocks)
     return _project_response(project)
 
 
@@ -894,6 +1069,19 @@ def delete_model_endpoint(
 ) -> ProjectResponse:
     project, model = delete_model(_session_project_path(project_id), model_id)
     project = record_activity(project, "model", f"Model {model.name} deleted.", severity="warning", object_id=model.id)
+    project = write_project(project)
+    return _project_response(project)
+
+
+@app.post("/projects/{project_id}/models/{model_id}/duplicate", response_model=ProjectResponse)
+def duplicate_model_endpoint(
+    project_id: str,
+    model_id: str,
+    name: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project = duplicate_model(_session_project_path(project_id), model_id, name)
+    project = record_activity(project, "model", f"Model duplicated as {name}.", object_id=model_id)
     project = write_project(project)
     return _project_response(project)
 
@@ -1010,6 +1198,8 @@ def stop_run_endpoint(
     project, _run = stop_run(_session_project_path(project_id), run_id, job)
     if job is not None:
         job_store.put(job)
+    if run.job_id is not None:
+        _interrupt_training_thread(run.job_id)
     return _project_response(project)
 
 
@@ -1127,7 +1317,21 @@ def export_onnx_endpoint(
     request: ExportOnnxRequest,
     _token: None = Depends(require_session_token),
 ) -> Job:
-    job = export_checkpoint_onnx(_session_project_path(project_id), run_id, checkpoint_id, request.destination)
+    job = export_checkpoint_onnx(_session_project_path(project_id), run_id=run_id, checkpoint_id=checkpoint_id, destination=request.destination)
+    job.project_id = project_id
+    job_store.put(job)
+    return job
+
+
+@app.post("/projects/{project_id}/models/{model_id}/export-onnx", response_model=Job)
+def export_model_onnx_endpoint(
+    project_id: str,
+    model_id: str,
+    request: ExportOnnxRequest,
+    output_scale: int = 4,
+    _token: None = Depends(require_session_token),
+) -> Job:
+    job = export_checkpoint_onnx(_session_project_path(project_id), model_id=model_id, output_scale=output_scale, destination=request.destination)
     job.project_id = project_id
     job_store.put(job)
     return job
@@ -1144,9 +1348,7 @@ def run_inference_endpoint(
     request: InferenceRequest,
     _token: None = Depends(require_session_token),
 ) -> InferenceRecord:
-    record, job = run_inference(_session_project_path(project_id), request)
-    job.project_id = project_id
-    job_store.put(job)
+    record, job = run_inference(_session_project_path(project_id), request, job_store)
     return record
 
 

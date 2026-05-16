@@ -14,12 +14,16 @@ class CheckpointsTab extends StatefulWidget {
     required this.client,
     required this.project,
     required this.onInferenceHandoff,
+    this.onFineTuneHandoff,
+    this.onNavigateToTab,
     super.key,
   });
 
   final BackendClient client;
   final ProjectState project;
   final ValueChanged<String> onInferenceHandoff;
+  final void Function(String checkpointId, String? coreWeightsPath)? onFineTuneHandoff;
+  final void Function(int)? onNavigateToTab;
 
   @override
   State<CheckpointsTab> createState() => _CheckpointsTabState();
@@ -76,15 +80,9 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
   }
 
   String? _findRunIdForCheckpoint(String checkpointId) {
-    // Since RunSummary doesn't have checkpoints, we need to use the aggregate data
-    // The aggregate checkpoints contain run_id information
     for (final checkpoint in _aggregate?.checkpoints ?? []) {
       if (checkpoint.id == checkpointId) {
-        // Extract run_id from checkpoint path or metadata if available
-        // For now, return the first run ID as a fallback
-        if (widget.project.runs.isNotEmpty) {
-          return widget.project.runs.first.id;
-        }
+        return checkpoint.runId;
       }
     }
     return null;
@@ -147,6 +145,13 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
   }
 
   Future<void> _exportOnnx(CheckpointSummary checkpoint) async {
+    if (_onnxReadiness?.available != true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ONNX export requires the onnx package. Install it in the backend environment.')),
+      );
+      return;
+    }
     final dest = await const PathPicker().pickFolder(confirmButtonText: 'Export here');
     if (dest == null || !mounted) return;
     try {
@@ -171,11 +176,28 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _loadAggregate, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    final models = widget.project.models.where((m) =>
+        m.trainHistory != null && m.trainHistory!.isNotEmpty).toList();
     final runs = widget.project.runs;
-    if (runs.isEmpty) {
+
+    if (models.isEmpty && runs.isEmpty) {
       return const BlockedState(
         title: 'Checkpoints',
-        message: 'No runs yet. Train a model to create checkpoints.',
+        message: 'No training history yet. Train a model to create checkpoints.',
         icon: Icons.save_alt,
       );
     }
@@ -185,12 +207,11 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
     final actions = _aggregate?.actions ?? <String, ActionState>{};
 
     if (checkpoints.isEmpty) {
-      return const _EmptyCheckpoints();
+      return _EmptyCheckpoints(onNavigateToTab: widget.onNavigateToTab);
     }
 
     return Column(
       children: [
-        // Header with aggregate info
         _AggregateHeader(
           checkpointCount: checkpoints.length,
           bestCheckpoint: bestCheckpoint,
@@ -203,53 +224,93 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
               : null,
         ),
         
-        // PSNR strip chart
         if (bestCheckpoint != null && _aggregate?.psnrDelta != null)
           _PsnrStrip(
             checkpoints: checkpoints,
             psnrDelta: _aggregate!.psnrDelta!,
           ),
         
-        // Checkpoints table
         Expanded(
-          child: _CheckpointTable(
-            checkpoints: checkpoints,
-            bestCheckpoint: bestCheckpoint,
-            selected: _selected,
-            selectedForComparison: _selectedForComparison,
-            onSelected: (checkpoint) {
-              setState(() {
-                _selected = checkpoint;
-              });
-            },
-            onToggleComparison: (checkpointId, isMultiSelect) {
-              setState(() {
-                if (isMultiSelect) {
-                  if (_selectedForComparison.contains(checkpointId)) {
-                    _selectedForComparison.remove(checkpointId);
-                  } else {
-                    _selectedForComparison.add(checkpointId);
-                  }
-                } else {
-                  _selectedForComparison.clear();
-                  _selectedForComparison.add(checkpointId);
-                }
-              });
-            },
-            onInference: (checkpoint) => widget.onInferenceHandoff(checkpoint.id),
-            onDelete: _confirmDelete,
-            onExportPth: _exportPth,
-            onExportOnnx: _exportOnnx,
+          child: ListView(
+            children: [
+              for (final model in models)
+                _ModelSessionGroup(
+                  model: model,
+                  checkpoints: checkpoints,
+                  bestCheckpoint: bestCheckpoint,
+                  selected: _selected,
+                  selectedForComparison: _selectedForComparison,
+                  onSelected: (checkpoint) {
+                    setState(() => _selected = checkpoint);
+                  },
+                  onToggleComparison: (checkpointId, isMultiSelect) {
+                    setState(() {
+                      if (isMultiSelect) {
+                        if (_selectedForComparison.contains(checkpointId)) {
+                          _selectedForComparison.remove(checkpointId);
+                        } else {
+                          _selectedForComparison.add(checkpointId);
+                        }
+                      } else {
+                        _selectedForComparison.clear();
+                        _selectedForComparison.add(checkpointId);
+                      }
+                    });
+                  },
+                  onInference: (checkpoint) => widget.onInferenceHandoff(checkpoint.id),
+                  onFineTune: (checkpoint) => widget.onFineTuneHandoff?.call(
+                    checkpoint.id,
+                    'models/${model.id}/core_weights/${checkpoint.runId}_core.pth',
+                  ),
+                  onDelete: _confirmDelete,
+                  onExportPth: _exportPth,
+                  onExportOnnx: _exportOnnx,
+                ),
+              if (models.isEmpty && checkpoints.isNotEmpty)
+                _LegacyCheckpointList(
+                  checkpoints: checkpoints,
+                  bestCheckpoint: bestCheckpoint,
+                  selected: _selected,
+                  selectedForComparison: _selectedForComparison,
+                  onSelected: (checkpoint) {
+                    setState(() => _selected = checkpoint);
+                  },
+                  onToggleComparison: (checkpointId, isMultiSelect) {
+                    setState(() {
+                      if (isMultiSelect) {
+                        if (_selectedForComparison.contains(checkpointId)) {
+                          _selectedForComparison.remove(checkpointId);
+                        } else {
+                          _selectedForComparison.add(checkpointId);
+                        }
+                      } else {
+                        _selectedForComparison.clear();
+                        _selectedForComparison.add(checkpointId);
+                      }
+                    });
+                  },
+                  onInference: (checkpoint) => widget.onInferenceHandoff(checkpoint.id),
+                  onFineTune: (checkpoint) => widget.onFineTuneHandoff?.call(
+                    checkpoint.id,
+                    null,
+                  ),
+                  onDelete: _confirmDelete,
+                  onExportPth: _exportPth,
+                  onExportOnnx: _exportOnnx,
+                ),
+            ],
           ),
         ),
         
-        // Footer with comparison actions
         _ComparisonFooter(
           selectedCount: _selectedForComparison.length,
           canPrune: actions['prune']?.supported == true,
           canCompare: _selectedForComparison.length >= 2,
           onPrune: actions['prune']?.supported == true ? () => _handlePrune() : null,
           onCompare: _selectedForComparison.length >= 2 ? () => _handleCompare() : null,
+          onDeleteSelected: _selectedForComparison.isNotEmpty
+              ? () => _confirmBatchDelete(_selectedForComparison.toList())
+              : null,
         ),
       ],
     );
@@ -267,6 +328,50 @@ class _CheckpointsTabState extends State<CheckpointsTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Compare functionality not yet implemented')),
     );
+  }
+
+  Future<void> _confirmBatchDelete(List<String> ids) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Delete ${ids.length} checkpoint${ids.length == 1 ? '' : 's'}?'),
+        content: const Text('Selected checkpoints will be permanently deleted. Historical references will be preserved but disabled.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).extension<SrTokens>()!.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    int deleted = 0;
+    for (final id in ids) {
+      final runId = _findRunIdForCheckpoint(id);
+      if (runId == null) continue;
+      try {
+        await widget.client.deleteCheckpoint(
+          projectId: widget.project.id,
+          runId: runId,
+          checkpointId: id,
+        );
+        deleted++;
+      } on ApiException catch (e) {
+        if (mounted) setState(() => _error = e.toString());
+        break;
+      }
+    }
+    if (mounted) {
+      setState(() => _selectedForComparison.clear());
+      await _loadAggregate();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $deleted checkpoint${deleted == 1 ? '' : 's'}.')),
+      );
+    }
   }
 }
 
@@ -390,10 +495,13 @@ class _PsnrStrip extends StatelessWidget {
                   color: tokens.muted,
                 ),
               ),
-              Text(
-                '${min.toStringAsFixed(2)} → ${max.toStringAsFixed(2)} dB · +${psnrDelta.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontFamily: 'IBM Plex Mono',
+              Tooltip(
+                message: 'Improvement in validation PSNR from the first saved checkpoint to the current best (dB).',
+                child: Text(
+                  '${min.toStringAsFixed(2)} → ${max.toStringAsFixed(2)} dB · Δ PSNR +${psnrDelta.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'IBM Plex Mono',
+                  ),
                 ),
               ),
             ],
@@ -411,12 +519,14 @@ class _PsnrStrip extends StatelessWidget {
 }
 
 class _EmptyCheckpoints extends StatelessWidget {
-  const _EmptyCheckpoints();
+  const _EmptyCheckpoints({this.onNavigateToTab});
+
+  final void Function(int)? onNavigateToTab;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 460),
@@ -460,18 +570,17 @@ class _EmptyCheckpoints extends StatelessWidget {
                 SrButton(
                   label: 'Start training →',
                   icon: Icons.play_arrow,
-                  onPressed: () {
-                    // TODO: Navigate to training tab
-                  },
+                  onPressed: () => onNavigateToTab?.call(3),
                 ),
                 const SizedBox(width: 8),
-                SrButton(
-                  label: 'Import .pt file',
-                  icon: Icons.download,
-                  style: SrButtonStyle.ghost,
-                  onPressed: () {
-                    // TODO: Implement import
-                  },
+                Tooltip(
+                  message: 'Coming soon — import will be available in a future update.',
+                  child: SrButton(
+                    label: 'Import .pt file',
+                    icon: Icons.download,
+                    style: SrButtonStyle.ghost,
+                    onPressed: null,
+                  ),
                 ),
               ],
             ),
@@ -491,6 +600,7 @@ class _CheckpointTable extends StatelessWidget {
     required this.onSelected,
     required this.onToggleComparison,
     required this.onInference,
+    required this.onFineTune,
     required this.onDelete,
     required this.onExportPth,
     required this.onExportOnnx,
@@ -503,6 +613,7 @@ class _CheckpointTable extends StatelessWidget {
   final ValueChanged<CheckpointSummary> onSelected;
   final Function(String checkpointId, bool isMultiSelect) onToggleComparison;
   final Function(CheckpointSummary) onInference;
+  final Function(CheckpointSummary) onFineTune;
   final Function(CheckpointSummary) onDelete;
   final Function(CheckpointSummary) onExportPth;
   final Function(CheckpointSummary) onExportOnnx;
@@ -557,6 +668,7 @@ class _CheckpointTable extends StatelessWidget {
                   onTap: () => onSelected(checkpoint),
                   onComparisonToggle: (isMultiSelect) => onToggleComparison(checkpoint.id, isMultiSelect),
                   onInference: () => onInference(checkpoint),
+                  onFineTune: () => onFineTune(checkpoint),
                   onDelete: () => onDelete(checkpoint),
                   onExportPth: () => onExportPth(checkpoint),
                   onExportOnnx: () => onExportOnnx(checkpoint),
@@ -593,6 +705,7 @@ class _CheckpointRow extends StatelessWidget {
     required this.onTap,
     required this.onComparisonToggle,
     required this.onInference,
+    required this.onFineTune,
     required this.onDelete,
     required this.onExportPth,
     required this.onExportOnnx,
@@ -605,6 +718,7 @@ class _CheckpointRow extends StatelessWidget {
   final VoidCallback onTap;
   final Function(bool isMultiSelect) onComparisonToggle;
   final VoidCallback onInference;
+  final VoidCallback onFineTune;
   final VoidCallback onDelete;
   final VoidCallback onExportPth;
   final VoidCallback onExportOnnx;
@@ -728,6 +842,9 @@ class _CheckpointRow extends StatelessWidget {
                         case 'inference':
                           onInference();
                           break;
+                        case 'fine_tune':
+                          onFineTune();
+                          break;
                         case 'export_pth':
                           onExportPth();
                           break;
@@ -747,6 +864,16 @@ class _CheckpointRow extends StatelessWidget {
                             Icon(Icons.compare, size: 16),
                             SizedBox(width: 8),
                             Text('Run inference'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'fine_tune',
+                        child: Row(
+                          children: [
+                            Icon(Icons.tune, size: 16),
+                            SizedBox(width: 8),
+                            Text('Fine-tune from here'),
                           ],
                         ),
                       ),
@@ -829,6 +956,7 @@ class _ComparisonFooter extends StatelessWidget {
     required this.canCompare,
     required this.onPrune,
     required this.onCompare,
+    this.onDeleteSelected,
   });
 
   final int selectedCount;
@@ -836,11 +964,12 @@ class _ComparisonFooter extends StatelessWidget {
   final bool canCompare;
   final VoidCallback? onPrune;
   final VoidCallback? onCompare;
+  final VoidCallback? onDeleteSelected;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -858,6 +987,17 @@ class _ComparisonFooter extends StatelessWidget {
           ),
           Row(
             children: [
+              if (onDeleteSelected != null) ...[
+                TextButton.icon(
+                  onPressed: onDeleteSelected,
+                  icon: Icon(Icons.delete_outline, size: 16, color: tokens.danger),
+                  label: Text(
+                    'Delete selected ($selectedCount)',
+                    style: TextStyle(color: tokens.danger, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
               SrButton(
                 label: 'Prune older',
                 icon: Icons.delete_outline,
@@ -880,6 +1020,359 @@ class _ComparisonFooter extends StatelessWidget {
   }
 }
 
+
+class _LegacyCheckpointList extends StatelessWidget {
+  const _LegacyCheckpointList({
+    required this.checkpoints,
+    required this.bestCheckpoint,
+    required this.selected,
+    required this.selectedForComparison,
+    required this.onSelected,
+    required this.onToggleComparison,
+    required this.onInference,
+    required this.onFineTune,
+    required this.onDelete,
+    required this.onExportPth,
+    required this.onExportOnnx,
+  });
+
+  final List<CheckpointSummary> checkpoints;
+  final CheckpointSummary? bestCheckpoint;
+  final CheckpointSummary? selected;
+  final Set<String> selectedForComparison;
+  final ValueChanged<CheckpointSummary> onSelected;
+  final Function(String checkpointId, bool isMultiSelect) onToggleComparison;
+  final Function(CheckpointSummary) onInference;
+  final Function(CheckpointSummary) onFineTune;
+  final Function(CheckpointSummary) onDelete;
+  final Function(CheckpointSummary) onExportPth;
+  final Function(CheckpointSummary) onExportOnnx;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CheckpointTable(
+      checkpoints: checkpoints,
+      bestCheckpoint: bestCheckpoint,
+      selected: selected,
+      selectedForComparison: selectedForComparison,
+      onSelected: onSelected,
+      onToggleComparison: onToggleComparison,
+      onInference: onInference,
+      onFineTune: onFineTune,
+      onDelete: onDelete,
+      onExportPth: onExportPth,
+      onExportOnnx: onExportOnnx,
+    );
+  }
+}
+
+class _ModelSessionGroup extends StatelessWidget {
+  const _ModelSessionGroup({
+    required this.model,
+    required this.checkpoints,
+    required this.bestCheckpoint,
+    required this.selected,
+    required this.selectedForComparison,
+    required this.onSelected,
+    required this.onToggleComparison,
+    required this.onInference,
+    required this.onFineTune,
+    required this.onDelete,
+    required this.onExportPth,
+    required this.onExportOnnx,
+  });
+
+  final ModelSummary model;
+  final List<CheckpointSummary> checkpoints;
+  final CheckpointSummary? bestCheckpoint;
+  final CheckpointSummary? selected;
+  final Set<String> selectedForComparison;
+  final ValueChanged<CheckpointSummary> onSelected;
+  final Function(String checkpointId, bool isMultiSelect) onToggleComparison;
+  final Function(CheckpointSummary) onInference;
+  final Function(CheckpointSummary) onFineTune;
+  final Function(CheckpointSummary) onDelete;
+  final Function(CheckpointSummary) onExportPth;
+  final Function(CheckpointSummary) onExportOnnx;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<SrTokens>()!;
+
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: tokens.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.memory, size: 16, color: tokens.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    model.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 8),
+                  SrChip(
+                    label: model.status,
+                    kind: model.status == 'trained' ? SrChipKind.ok : SrChipKind.default_,
+                    size: SrChipSize.sm,
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${model.numFeatures} features · ${model.numBlocks} blocks',
+                    style: TextStyle(color: tokens.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            for (final session in (model.trainHistory ?? []))
+              _TrainingSessionCard(
+                session: session,
+                modelId: model.id,
+                trainedCoreWeightsPath: model.trainedCoreWeightsPath,
+                checkpoints: checkpoints,
+                bestCheckpoint: bestCheckpoint,
+                selected: selected,
+                selectedForComparison: selectedForComparison,
+                onSelected: onSelected,
+                onToggleComparison: onToggleComparison,
+                onInference: onInference,
+                onFineTune: onFineTune,
+                onDelete: onDelete,
+                onExportPth: onExportPth,
+                onExportOnnx: onExportOnnx,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingSessionCard extends StatelessWidget {
+  const _TrainingSessionCard({
+    required this.session,
+    required this.modelId,
+    required this.trainedCoreWeightsPath,
+    required this.checkpoints,
+    required this.bestCheckpoint,
+    required this.selected,
+    required this.selectedForComparison,
+    required this.onSelected,
+    required this.onToggleComparison,
+    required this.onInference,
+    required this.onFineTune,
+    required this.onDelete,
+    required this.onExportPth,
+    required this.onExportOnnx,
+  });
+
+  final TrainHistoryEntry session;
+  final String modelId;
+  final String? trainedCoreWeightsPath;
+  final List<CheckpointSummary> checkpoints;
+  final CheckpointSummary? bestCheckpoint;
+  final CheckpointSummary? selected;
+  final Set<String> selectedForComparison;
+  final ValueChanged<CheckpointSummary> onSelected;
+  final Function(String checkpointId, bool isMultiSelect) onToggleComparison;
+  final Function(CheckpointSummary) onInference;
+  final Function(CheckpointSummary) onFineTune;
+  final Function(CheckpointSummary) onDelete;
+  final Function(CheckpointSummary) onExportPth;
+  final Function(CheckpointSummary) onExportOnnx;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<SrTokens>()!;
+    final sessionCheckpoints = checkpoints
+        .where((c) => c.runId == session.sessionId)
+        .toList();
+
+    final bestPsnr = session.bestMetrics['val_psnr'];
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 14, color: tokens.muted),
+              const SizedBox(width: 6),
+              Text(
+                session.datasetName,
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(width: 8),
+              Text('x${session.scale}', style: TextStyle(color: tokens.muted, fontSize: 12)),
+              const SizedBox(width: 8),
+              if (bestPsnr != null)
+                Text(
+                  'PSNR: ${bestPsnr.toStringAsFixed(2)} dB',
+                  style: TextStyle(color: tokens.accent, fontSize: 12),
+                ),
+              const Spacer(),
+              Text(
+                '${session.checkpoints.length} checkpoints · ${session.epochs} epochs',
+                style: TextStyle(color: tokens.muted, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                _formatSessionDate(session.completedAt),
+                style: TextStyle(color: tokens.muted, fontSize: 11),
+              ),
+              const Spacer(),
+              if (session.bestCheckpointId.isNotEmpty)
+                SrChip(
+                  label: '★ Best (auto-extracted)',
+                  kind: SrChipKind.ok,
+                  size: SrChipSize.sm,
+                ),
+            ],
+          ),
+          if (sessionCheckpoints.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...sessionCheckpoints.map((ckpt) => _SessionCheckpointRow(
+              checkpoint: ckpt,
+              isBest: ckpt.id == session.bestCheckpointId,
+              modelId: modelId,
+              trainedCoreWeightsPath: trainedCoreWeightsPath,
+              selected: selected,
+              selectedForComparison: selectedForComparison,
+              onTap: () => onSelected(ckpt),
+              onComparisonToggle: (isMultiSelect) => onToggleComparison(ckpt.id, isMultiSelect),
+              onInference: () => onInference(ckpt),
+              onFineTune: () => onFineTune(ckpt),
+              onDelete: () => onDelete(ckpt),
+              onExportPth: () => onExportPth(ckpt),
+              onExportOnnx: () => onExportOnnx(ckpt),
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionCheckpointRow extends StatelessWidget {
+  const _SessionCheckpointRow({
+    required this.checkpoint,
+    required this.isBest,
+    required this.modelId,
+    required this.trainedCoreWeightsPath,
+    required this.selected,
+    required this.selectedForComparison,
+    required this.onTap,
+    required this.onComparisonToggle,
+    required this.onInference,
+    required this.onFineTune,
+    required this.onDelete,
+    required this.onExportPth,
+    required this.onExportOnnx,
+  });
+
+  final CheckpointSummary checkpoint;
+  final bool isBest;
+  final String modelId;
+  final String? trainedCoreWeightsPath;
+  final CheckpointSummary? selected;
+  final Set<String> selectedForComparison;
+  final VoidCallback onTap;
+  final Function(bool isMultiSelect) onComparisonToggle;
+  final VoidCallback onInference;
+  final VoidCallback onFineTune;
+  final VoidCallback onDelete;
+  final VoidCallback onExportPth;
+  final VoidCallback onExportOnnx;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<SrTokens>()!;
+    final isSelected = checkpoint.id == selected?.id;
+    final isComparisonSelected = selectedForComparison.contains(checkpoint.id);
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isBest ? tokens.accent.withValues(alpha: 0.08) : 
+                 isSelected ? tokens.border.withValues(alpha: 0.2) : null,
+          border: Border(bottom: BorderSide(color: tokens.border.withValues(alpha: 0.2))),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              child: isBest
+                  ? Icon(Icons.auto_awesome, size: 14, color: tokens.warning)
+                  : null,
+            ),
+            SizedBox(
+              width: 16,
+              child: GestureDetector(
+                onTap: () => onComparisonToggle(false),
+                child: Container(
+                  width: 14, height: 14,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: tokens.border),
+                    borderRadius: BorderRadius.circular(2),
+                    color: isComparisonSelected ? tokens.accent : null,
+                  ),
+                  child: isComparisonSelected
+                      ? Icon(Icons.check, size: 10, color: Colors.white)
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('epoch_${checkpoint.epoch.toString().padLeft(4, '0')}_iter_${checkpoint.iteration.toString().padLeft(6, '0')}',
+              style: TextStyle(fontSize: 12, fontWeight: isBest ? FontWeight.w600 : null, color: isBest ? tokens.accent : null),
+            ),
+            const SizedBox(width: 12),
+            Text('PSNR: ${_fmtMetric(checkpoint.metrics['val_psnr'], "dB")}', style: TextStyle(fontSize: 11, color: tokens.muted)),
+            const Spacer(),
+            SrButton(
+              label: 'Infer',
+              icon: Icons.play_arrow,
+              onPressed: onInference,
+              size: SrButtonSize.sm,
+            ),
+            const SizedBox(width: 4),
+            SrButton(
+              label: 'Tune',
+              icon: Icons.tune,
+              onPressed: onFineTune,
+              size: SrButtonSize.sm,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _formatSessionDate(String iso) {
+  if (iso.isEmpty) return '—';
+  try {
+    final dt = DateTime.parse(iso).toLocal();
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  } catch (_) {
+    return iso;
+  }
+}
 
 String _fmtMetric(double? value, String? unit) {
   if (value == null || value == 0) return '—';

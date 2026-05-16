@@ -12,6 +12,7 @@ from .errors import ApiError
 from .ids import new_id
 from .jobs import Job, utc_now_iso
 from .project_store import open_project, store_asset_path, write_project
+from .runs import build_internal_sr_model
 from .schemas import ProjectState
 
 
@@ -237,7 +238,7 @@ def export_checkpoint_pth(project_root: Path, run_id: str, checkpoint_id: str, d
     return job
 
 
-def export_checkpoint_onnx(project_root: Path, run_id: str, checkpoint_id: str, destination: str) -> Job:
+def export_checkpoint_onnx(project_root: Path, run_id: str | None = None, checkpoint_id: str | None = None, destination: str = "", model_id: str | None = None, output_scale: int | None = None) -> Job:
     readiness = onnx_readiness()
     if not readiness.available:
         raise ApiError(409, "onnx_unavailable", readiness.message)
@@ -246,12 +247,50 @@ def export_checkpoint_onnx(project_root: Path, run_id: str, checkpoint_id: str, 
     import torch.onnx
 
     project = open_project(project_root)
+
+    if model_id is not None:
+        if output_scale is None:
+            raise ApiError(422, "output_scale_required", "Output scale is required for model-based ONNX export.")
+        model_raw = next((m for m in project.models if m.get("id") == model_id), None)
+        if model_raw is None:
+            raise ApiError(404, "model_not_found", "Model was not found.", details={"model_id": model_id})
+        if not model_raw.get("trained_core_weights_path"):
+            raise ApiError(422, "model_not_trained", "Model has no trained core weights.")
+        num_features = model_raw.get("num_features", 32)
+        num_blocks = model_raw.get("num_blocks", 4)
+        model = build_internal_sr_model(scale=output_scale, num_features=num_features, num_blocks=num_blocks)
+        core_path_str = model_raw.get("trained_core_weights_path")
+        if core_path_str:
+            core_path = Path(core_path_str)
+            if not core_path.is_absolute():
+                core_path = project_root / core_path
+            if core_path.exists():
+                core_state = torch.load(core_path, map_location="cpu", weights_only=False)
+                model.body.load_state_dict(core_state)
+        model.eval()
+        dest = Path(destination)
+        if dest.is_dir():
+            dest = dest / f"model_{model_id}_x{output_scale}.onnx"
+        dummy = torch.zeros(1, 3, 64, 64)
+        torch.onnx.export(model, dummy, str(dest), opset_version=17, input_names=["lr"], output_names=["sr"])
+        job = Job(
+            type="export_onnx",
+            project_id=project.id,
+            object_id=model_id,
+            status="completed",
+            progress=1.0,
+            started_at=utc_now_iso(),
+            finished_at=utc_now_iso(),
+            logs=[f"Exported ONNX model to {dest}."],
+        )
+        return job
+
+    if checkpoint_id is None or run_id is None:
+        raise ApiError(422, "export_source_required", "Provide checkpoint_id+run_id or model_id.")
     raw_run = _find_run_raw(project, run_id)
     checkpoints = [CheckpointMetadata.model_validate(c) for c in raw_run.get("checkpoints", [])]
     target = _get_active_checkpoint(checkpoints, checkpoint_id)
     payload = validate_checkpoint_payload(project_root, target.path)
-
-    from .runs import build_internal_sr_model  # type: ignore[attr-defined]
 
     model_config = payload.get("model_config", {})
     scale = payload.get("scale", target.scale)
@@ -380,3 +419,66 @@ def _module_available(name: str) -> bool:
         return importlib.util.find_spec(name) is not None
     except (ModuleNotFoundError, ValueError):
         return False
+
+
+def extract_core_weights(checkpoint_path: Path) -> dict[str, Any]:
+    """Load a checkpoint and extract only the core (body) weights, stripping head and tail layers.
+
+    For internal_residual_pixelshuffle architecture:
+    - Head: head.weight, head.bias (first Conv2d)
+    - Core: body.* (residual blocks)
+    - Tail: tail.0.weight, tail.0.bias (last Conv2d in Sequential)
+
+    Returns the filtered state_dict (core keys only).
+    """
+    payload = _load_payload(checkpoint_path)
+    state = payload.get("model_state_dict")
+    if state is None:
+        raise ApiError(422, "checkpoint_no_state", "Checkpoint has no model_state_dict.", details={"path": str(checkpoint_path)})
+    core = {k: v for k, v in state.items() if k.startswith("body.")}
+    if not core:
+        raise ApiError(422, "core_weights_empty", "No core weights found (no keys starting with 'body.').", details={"path": str(checkpoint_path)})
+    return core
+
+
+def _save_core_weights(core_state: dict[str, Any], model_core_dir: Path, run_id: str) -> Path:
+    model_core_dir.mkdir(parents=True, exist_ok=True)
+    core_path = model_core_dir / f"{run_id}_core.pth"
+    if _module_available("torch"):
+        import torch
+        torch.save(core_state, core_path)
+    else:
+        core_path.write_text(json.dumps({"core_weights": {k: v.tolist() if hasattr(v, 'tolist') else v for k, v in core_state.items()}}), encoding="utf-8")
+    return core_path
+
+
+def _save_core_metadata(model_core_dir: Path, model_id: str, source_checkpoint_path: str, run_id: str) -> Path:
+    meta = {
+        "model_id": model_id,
+        "extracted_at": utc_now_iso(),
+        "source_checkpoint": source_checkpoint_path,
+        "input_channels": 3,
+        "output_channels": 3,
+        "run_id": run_id,
+    }
+    meta_path = model_core_dir / f"{run_id}_core.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return meta_path
+
+
+def extract_and_save_core_weights(
+    checkpoint_path: Path,
+    project_root: Path,
+    model_id: str,
+    run_id: str,
+) -> str:
+    """Extract core weights from a checkpoint and save to models/<model_id>/core_weights/.
+
+    Returns the relative stored path to the saved core weights file.
+    """
+    core = extract_core_weights(checkpoint_path)
+    model_core_dir = project_root / "models" / model_id / "core_weights"
+    core_path = _save_core_weights(core, model_core_dir, run_id)
+    stored = store_asset_path(project_root, core_path).stored
+    _save_core_metadata(model_core_dir, model_id, str(checkpoint_path), run_id)
+    return stored

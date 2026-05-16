@@ -140,35 +140,105 @@ class DatasetSummary {
   }
 }
 
+class TrainHistoryEntry {
+  TrainHistoryEntry({
+    required this.sessionId,
+    required this.datasetId,
+    required this.datasetName,
+    required this.scale,
+    required this.startedAt,
+    required this.completedAt,
+    required this.epochs,
+    this.bestMetrics = const {},
+    this.checkpoints = const [],
+    this.bestCheckpointId = '',
+    this.fineTunedFromCheckpointId = '',
+    this.fineTunedFromCoreWeightsPath = '',
+  });
+
+  final String sessionId;
+  final String datasetId;
+  final String datasetName;
+  final int scale;
+  final String startedAt;
+  final String completedAt;
+  final int epochs;
+  final Map<String, double> bestMetrics;
+  final List<CheckpointSummary> checkpoints;
+  final String bestCheckpointId;
+  final String fineTunedFromCheckpointId;
+  final String fineTunedFromCoreWeightsPath;
+
+  factory TrainHistoryEntry.fromJson(Map<String, dynamic> json) {
+    final rawMetrics = json['best_metrics'] as Map<String, dynamic>? ?? {};
+    return TrainHistoryEntry(
+      sessionId: json['session_id'] as String? ?? '',
+      datasetId: json['dataset_id'] as String? ?? '',
+      datasetName: json['dataset_name'] as String? ?? '',
+      scale: json['scale'] as int? ?? 0,
+      startedAt: json['started_at'] as String? ?? '',
+      completedAt: json['completed_at'] as String? ?? '',
+      epochs: json['epochs'] as int? ?? 0,
+      bestMetrics: {
+        for (final e in rawMetrics.entries)
+          e.key: (e.value as num?)?.toDouble() ?? 0,
+      },
+      checkpoints: [
+        for (final item in json['checkpoints'] as List<dynamic>? ?? const [])
+          CheckpointSummary.fromJson(item as Map<String, dynamic>),
+      ],
+      bestCheckpointId: json['best_checkpoint_id'] as String? ?? '',
+      fineTunedFromCheckpointId: json['fine_tuned_from_checkpoint_id'] as String? ?? '',
+      fineTunedFromCoreWeightsPath: json['fine_tuned_from_core_weights_path'] as String? ?? '',
+    );
+  }
+}
+
 class ModelSummary {
   ModelSummary({
     required this.id,
     required this.name,
     required this.architecture,
-    required this.scale,
+    this.scale,
     required this.numFeatures,
     required this.numBlocks,
     required this.status,
+    this.trainedCoreWeightsPath,
+    this.trainHistory,
   });
 
   final String id;
   final String name;
   final String architecture;
-  final int scale;
+  final int? scale;
   final int numFeatures;
   final int numBlocks;
   final String status;
+  final String? trainedCoreWeightsPath;
+  final List<TrainHistoryEntry>? trainHistory;
+
+  @override
+  bool operator ==(Object other) => other is ModelSummary && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 
   factory ModelSummary.fromJson(Map<String, dynamic> json) {
+    final rawHistory = json['train_history'] as List<dynamic>? ?? const [];
     return ModelSummary(
       id: json['id'] as String,
       name: json['name'] as String,
       architecture:
           json['architecture'] as String? ?? 'internal_residual_pixelshuffle',
-      scale: json['scale'] as int? ?? 4,
+      scale: json['scale'] as int?,
       numFeatures: json['num_features'] as int? ?? 32,
       numBlocks: json['num_blocks'] as int? ?? 4,
       status: json['status'] as String? ?? 'untrained',
+      trainedCoreWeightsPath: json['trained_core_weights_path'] as String?,
+      trainHistory: [
+        for (final item in rawHistory)
+          TrainHistoryEntry.fromJson(item as Map<String, dynamic>),
+      ],
     );
   }
 }
@@ -261,6 +331,7 @@ class RunSummary {
     required this.batchSize,
     required this.checkpointCadence,
     required this.logDir,
+    this.error,
   });
 
   final String id;
@@ -274,6 +345,7 @@ class RunSummary {
   final int batchSize;
   final int checkpointCadence;
   final String? logDir;
+  final Map<String, dynamic>? error;
 
   bool get isActive => const {
     'running',
@@ -298,6 +370,7 @@ class RunSummary {
       batchSize: settings['batch_size'] as int? ?? 16,
       checkpointCadence: settings['checkpoint_cadence'] as int? ?? 1,
       logDir: json['log_dir'] as String?,
+      error: json['error'] as Map<String, dynamic>?,
     );
   }
 }
@@ -641,6 +714,12 @@ class CheckpointSummary {
   bool get isBestPsnr => tags.contains('best_psnr');
   bool get isBestLoss => tags.contains('best_loss');
 
+  @override
+  bool operator ==(Object other) => other is CheckpointSummary && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+
   factory CheckpointSummary.fromJson(Map<String, dynamic> json) {
     final rawMetrics = json['metrics'] as Map<String, dynamic>? ?? {};
     return CheckpointSummary(
@@ -735,6 +814,16 @@ class TileConfig {
   final String paddingMode;
   final String blendStrategy;
 
+  factory TileConfig.fromJson(Map<String, dynamic> json) {
+    return TileConfig(
+      enabled: json['enabled'] as bool? ?? false,
+      tileSize: json['tile_size'] as int? ?? 512,
+      overlap: json['overlap'] as int? ?? 32,
+      paddingMode: json['padding_mode'] as String? ?? 'reflect',
+      blendStrategy: json['blend_strategy'] as String? ?? 'average',
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'enabled': enabled,
     'tile_size': tileSize,
@@ -770,8 +859,10 @@ class PerFileResult {
 class InferenceRecord {
   InferenceRecord({
     required this.id,
-    required this.checkpointId,
-    required this.runId,
+    this.checkpointId,
+    this.runId,
+    this.modelId,
+    this.modelName,
     required this.scale,
     required this.mode,
     required this.inputPath,
@@ -782,11 +873,16 @@ class InferenceRecord {
     required this.perFileResults,
     this.outputPath,
     this.outputDir,
+    this.jobId,
+    this.tileConfig,
+    this.metrics = const {},
   });
 
   final String id;
-  final String checkpointId;
-  final String runId;
+  final String? checkpointId;
+  final String? runId;
+  final String? modelId;
+  final String? modelName;
   final int scale;
   final String mode;
   final String inputPath;
@@ -796,13 +892,18 @@ class InferenceRecord {
   final double runtimeSeconds;
   final String status;
   final String createdAt;
+  final String? jobId;
+  final TileConfig? tileConfig;
+  final Map<String, double> metrics;
   final List<PerFileResult> perFileResults;
 
   factory InferenceRecord.fromJson(Map<String, dynamic> json) {
     return InferenceRecord(
       id: json['id'] as String? ?? '',
-      checkpointId: json['checkpoint_id'] as String? ?? '',
-      runId: json['run_id'] as String? ?? '',
+      checkpointId: json['checkpoint_id'] as String?,
+      runId: json['run_id'] as String?,
+      modelId: json['model_id'] as String?,
+      modelName: json['model_name'] as String?,
       scale: json['scale'] as int? ?? 0,
       mode: json['mode'] as String? ?? 'single',
       inputPath: json['input_path'] as String? ?? '',
@@ -812,6 +913,13 @@ class InferenceRecord {
       runtimeSeconds: (json['runtime_seconds'] as num?)?.toDouble() ?? 0,
       status: json['status'] as String? ?? 'completed',
       createdAt: json['created_at'] as String? ?? '',
+      jobId: json['job_id'] as String?,
+      tileConfig: json['tile_config'] != null
+          ? TileConfig.fromJson(json['tile_config'] as Map<String, dynamic>)
+          : null,
+      metrics: (json['metrics'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ??
+          {},
       perFileResults: [
         for (final item
             in json['per_file_results'] as List<dynamic>? ?? const [])

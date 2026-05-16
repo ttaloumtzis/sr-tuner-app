@@ -303,7 +303,7 @@ def make_dataset_and_model(tmp_path, monkeypatch, *, scale: int = 4) -> tuple[st
     dataset = dataset_response.json()["project"]["datasets"][0]
     model_response = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "model_x4", "scale": scale, "num_features": 32, "num_blocks": 4},
+        json={"name": "model_x4", "num_features": 32, "num_blocks": 4},
         headers=auth_headers(),
     )
     assert model_response.status_code == 200
@@ -673,7 +673,7 @@ def test_model_create_list_update_loss_validation_and_defaults(tmp_path, monkeyp
 
     created = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "Tiny x4", "scale": 4, "num_features": 16, "num_blocks": 2},
+        json={"name": "Tiny x4", "num_features": 16, "num_blocks": 2},
         headers=auth_headers(),
     )
     assert created.status_code == 200
@@ -695,7 +695,7 @@ def test_model_create_list_update_loss_validation_and_defaults(tmp_path, monkeyp
 
     weighted_loss = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "GAN x4", "scale": 4, "loss_weights": {"l1": 1, "perceptual": 1, "adversarial": 0}},
+        json={"name": "GAN x4", "loss_weights": {"l1": 1, "perceptual": 1, "adversarial": 0}},
         headers=auth_headers(),
     )
     assert weighted_loss.status_code == 200
@@ -715,7 +715,7 @@ def test_model_status_and_dataset_compatibility(tmp_path, monkeypatch) -> None:
 
     model_response = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "Tiny x4", "scale": 4},
+        json={"name": "Tiny x4"},
         headers=auth_headers(),
     )
     model_id = model_response.json()["project"]["models"][0]["id"]
@@ -723,6 +723,7 @@ def test_model_status_and_dataset_compatibility(tmp_path, monkeypatch) -> None:
     compatible = client.get(f"/projects/{project_id}/compatibility?dataset_id={dataset_id}&model_id={model_id}")
     assert compatible.status_code == 200
     assert compatible.json()["compatible"] is True
+    assert compatible.json()["model_scale"] is None
 
     saved = json.loads((root / PROJECT_FILE_NAME).read_text(encoding="utf-8"))
     saved["runs"] = [
@@ -736,4 +737,4 @@ def test_model_status_and_dataset_compatibility(tmp_path, monkeypatch) -> None:
 
     model = client.get(f"/projects/{project_id}/models/{model_id}")
     assert model.status_code == 200
-    assert model.json()["status"] == "fine_tune_available"
+    assert model.json()["status"] == "untrained"

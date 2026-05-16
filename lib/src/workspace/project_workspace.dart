@@ -41,6 +41,9 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
   BoundedPoller<DashboardSummary>? _dashboardPoller;
   DashboardSummary? _dashboard;
   String? _inferenceHandoffCheckpointId;
+  String? _fineTuneHandoffCheckpointId;
+  String? _fineTuneHandoffCoreWeightsPath;
+  bool _dashboardError = false;
   final PageStorageBucket _tabStorage = PageStorageBucket();
 
   static const _tabs = [
@@ -98,8 +101,14 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
       fetch: () => widget.client.dashboardSummary(widget.project.id),
       onData: (value) {
         if (mounted) {
-          setState(() => _dashboard = value);
+          setState(() {
+            _dashboard = value;
+            _dashboardError = false;
+          });
         }
+      },
+      onError: (_) {
+        if (mounted) setState(() => _dashboardError = true);
       },
     )..start();
   }
@@ -167,12 +176,15 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
                     client: widget.client,
                     project: widget.project,
                     onProjectChanged: widget.onProjectChanged,
+                    onNavigateToTab: _navigateToTab,
                   ),
                   TrainingTab(
                     key: const PageStorageKey('training-tab'),
                     client: widget.client,
                     project: widget.project,
                     onProjectChanged: widget.onProjectChanged,
+                    initialFineTuneCheckpointId: _fineTuneHandoffCheckpointId,
+                    initialFineTuneCoreWeightsPath: _fineTuneHandoffCoreWeightsPath,
                   ),
                   LiveMetricsTab(
                     key: const PageStorageKey('live-tab'),
@@ -183,11 +195,19 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
                     key: const PageStorageKey('checkpoints-tab'),
                     client: widget.client,
                     project: widget.project,
+                    onNavigateToTab: _navigateToTab,
                     onInferenceHandoff: (checkpointId) {
                       setState(
                         () => _inferenceHandoffCheckpointId = checkpointId,
                       );
                       _navigateToTab(6);
+                    },
+                    onFineTuneHandoff: (checkpointId, coreWeightsPath) {
+                      setState(() {
+                        _fineTuneHandoffCheckpointId = checkpointId;
+                        _fineTuneHandoffCoreWeightsPath = coreWeightsPath;
+                      });
+                      _navigateToTab(3);
                     },
                   ),
                   InferenceTab(
@@ -195,12 +215,13 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
                     client: widget.client,
                     project: widget.project,
                     initialCheckpointId: _inferenceHandoffCheckpointId,
+                    onHandoffConsumed: () => setState(() => _inferenceHandoffCheckpointId = null),
                   ),
                 ],
               ),
             ),
           ),
-          _StatusBar(project: widget.project, dashboard: _dashboard),
+          _StatusBar(project: widget.project, dashboard: _dashboard, dashboardError: _dashboardError),
         ],
       ),
     );
@@ -223,6 +244,14 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
         density: density,
       );
       widget.onProjectChanged(envelope.project);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(milliseconds: 1500),
+            content: Text('Preferences saved.'),
+          ),
+        );
+      }
     } on ApiException {
       return;
     }
@@ -358,10 +387,15 @@ class _LiveBadge extends StatelessWidget {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.project, required this.dashboard});
+  const _StatusBar({
+    required this.project,
+    required this.dashboard,
+    this.dashboardError = false,
+  });
 
   final ProjectState project;
   final DashboardSummary? dashboard;
+  final bool dashboardError;
 
   @override
   Widget build(BuildContext context) {
@@ -393,6 +427,13 @@ class _StatusBar extends StatelessWidget {
             const SizedBox(width: 6),
             Text(status!.vcsBranch!, style: TextStyle(color: tokens.muted)),
             const SizedBox(width: 12),
+          ],
+          if (dashboardError) ...[
+            Tooltip(
+              message: 'Dashboard unavailable — retrying…',
+              child: Icon(Icons.sync_problem, color: tokens.muted, size: 14),
+            ),
+            const SizedBox(width: 10),
           ],
           if (status?.diskWarning == true) ...[
             Icon(Icons.warning_amber, color: tokens.warning, size: 16),

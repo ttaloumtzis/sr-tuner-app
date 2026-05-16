@@ -71,6 +71,8 @@ class RunSettings(BaseModel):
     scheduler: SchedulerOptions = Field(default_factory=SchedulerOptions)
     diff_mode: DiffMode = "absolute"
     loss_weights: LossWeights = Field(default_factory=LossWeights)
+    learning_rate: float | None = None
+    source_core_weights_path: str | None = None
 
 
 class RunLineage(BaseModel):
@@ -124,12 +126,14 @@ class RunSetupRequest(BaseModel):
     scheduler_decay_factor: float = Field(default=0.5, gt=0, le=1)
     diff_mode: DiffMode = "absolute"
     loss_weights: LossWeights = Field(default_factory=LossWeights)
+    learning_rate: float | None = None
+    source_core_weights_path: str | None = None
     source_checkpoint_id: str | None = None
     source_checkpoint_path: str | None = None
 
     @model_validator(mode="after")
     def validate_resume_source(self) -> "RunSetupRequest":
-        if self.train_mode in {"resume", "fine_tune"} and not (self.source_checkpoint_id or self.source_checkpoint_path):
+        if self.train_mode in {"resume", "fine_tune"} and not (self.source_checkpoint_id or self.source_checkpoint_path or self.source_core_weights_path):
             raise ValueError("A checkpoint source is required for resume or fine-tune runs.")
         return self
 
@@ -251,6 +255,8 @@ def create_run(project_root: Path, request: RunSetupRequest) -> tuple[ProjectSta
             ),
             diff_mode=request.diff_mode,
             loss_weights=request.loss_weights,
+            learning_rate=request.learning_rate,
+            source_core_weights_path=request.source_core_weights_path,
         ),
         train_indexes=train_indexes,
         validation_indexes=validation_indexes,
@@ -259,10 +265,9 @@ def create_run(project_root: Path, request: RunSetupRequest) -> tuple[ProjectSta
             source_checkpoint_path=request.source_checkpoint_path if request.train_mode == "resume" else None,
             fine_tune_source_checkpoint_id=request.source_checkpoint_id if request.train_mode == "fine_tune" else None,
         ),
-        metadata={
+metadata={
             "project_id": project.id,
             "dataset_scale": dataset.validated_scale or dataset.scale,
-            "model_scale": model.scale,
             "model_architecture": model.architecture,
         },
     )
@@ -512,7 +517,7 @@ def build_paired_sr_dataset(project_root: Path, dataset: DatasetObject, indexes:
     def _image_to_tensor(path: Path):
         image = Image.open(path).convert("RGB")
         width, height = image.size
-        values = torch.ByteTensor(torch.ByteStorage.from_buffer(image.tobytes()))
+        values = torch.frombuffer(image.tobytes(), dtype=torch.uint8).clone()
         values = values.view(height, width, 3).permute(2, 0, 1).float()
         return values / 255.0
 
@@ -558,26 +563,19 @@ def _validate_run_setup(project: ProjectState, dataset: DatasetObject, model: Mo
         raise ApiError(422, "run_name_required", "Run name is required.")
     if not dataset.validation.usable:
         raise ApiError(422, "dataset_not_usable", "Selected dataset is not usable for training.", details={"dataset_id": dataset.id})
-    dataset_scale = dataset.validated_scale or dataset.scale
-    if dataset_scale != model.scale:
-        raise ApiError(
-            422,
-            "dataset_model_scale_mismatch",
-            "Dataset scale does not match model scale.",
-            details={"dataset_scale": dataset_scale, "model_scale": model.scale},
-        )
     losses = request.loss_weights
     if losses.l1 <= 0 and losses.perceptual <= 0 and losses.adversarial <= 0:
         raise ApiError(422, "loss_weights_required", "At least one training loss weight must be greater than zero.")
-    if request.tensorboard and not training_readiness(include_tensorboard=True).available:
+    if request.tensorboard:
         readiness = training_readiness(include_tensorboard=True)
-        missing = [item.model_dump() for item in readiness.dependencies if item.required and not item.available]
-        raise ApiError(409, "tensorboard_dependency_missing", "TensorBoard logging dependency is unavailable.", details={"missing": missing})
+        if not readiness.available:
+            missing = [item.model_dump() for item in readiness.dependencies if item.required and not item.available]
+            raise ApiError(409, "tensorboard_dependency_missing", "TensorBoard logging dependency is unavailable.", details={"missing": missing})
     if not any(device.id == request.device for device in available_devices().devices):
         raise ApiError(422, "device_unavailable", "Selected training device is unavailable.", details={"device": request.device})
-    if _active_run(project) is not None:
-        active = _active_run(project)
-        raise ApiError(409, "active_run_exists", "Another training run is already active.", details={"run_id": active.id if active else None})
+    active = _active_run(project)
+    if active is not None:
+        raise ApiError(409, "active_run_exists", "Another training run is already active.", details={"run_id": active.id})
 
 
 def _active_run(project: ProjectState, *, exclude_run_id: str | None = None) -> RunObject | None:

@@ -111,6 +111,29 @@ class _ProjectControllerState extends State<ProjectController>
     }
   }
 
+  Future<void> _forgetAllRecentProjects() async {
+    _client.beginCorrelatedAction();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _backend.ensureStarted();
+      final envelope = await _client.forgetAllRecentProjects();
+      if (mounted) {
+        setState(() => _recentProjects = envelope.projects);
+      }
+    } on ApiException catch (error) {
+      setState(() => _error = error);
+    } catch (error) {
+      setState(() => _error = ApiException(error.toString()));
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   Future<void> _forgetRecentProject(String path) async {
     _client.beginCorrelatedAction();
     _log.info(EventNames.workflowAction, 'Forgetting recent project.', context: {'path': path});
@@ -238,6 +261,7 @@ class _ProjectControllerState extends State<ProjectController>
       recentProjects: _recentProjects,
       onRefreshRecent: _loadRecentProjects,
       onForgetRecent: _forgetRecentProject,
+      onForgetAllRecent: _forgetAllRecentProjects,
       onCreate: _createProject,
       onOpen: _openProject,
       onRetry: _restoreProject,

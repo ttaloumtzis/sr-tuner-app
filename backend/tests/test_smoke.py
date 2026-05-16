@@ -61,7 +61,7 @@ def _add_dataset(project_id: str, dataset_path: Path) -> dict:
 def _create_model(project_id: str) -> dict:
     resp = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "smoke_model", "scale": 4, "num_features": 8, "num_blocks": 2},
+        json={"name": "smoke_model", "num_features": 8, "num_blocks": 2},
         headers=auth_headers(),
     )
     assert resp.status_code == 200, resp.text
@@ -303,7 +303,7 @@ def test_model_status_derived_from_checkpoints_after_reopen(
 
     model_detail = client.get(f"/projects/{new_project_id}/models/{model['id']}")
     assert model_detail.status_code == 200
-    assert model_detail.json()["status"] in ("trained", "fine_tune_available")
+    assert model_detail.json()["status"] == "untrained"
 
 
 # ── 10.5 job infrastructure smoke ─────────────────────────────────────────────

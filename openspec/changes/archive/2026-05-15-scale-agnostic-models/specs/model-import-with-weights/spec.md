@@ -42,3 +42,25 @@ The system SHALL indicate in the UI whether an import will include weights or be
 #### Scenario: Importing untrained model
 - **WHEN** user clicks import on an untrained model
 - **THEN** the UI shows "Import configuration only" since no weights exist
+
+### Requirement: Same-project import only (Phase 1)
+The system SHALL support importing models within the same project only. Cross-project import is deferred.
+
+#### Scenario: Import within same project
+- **WHEN** the user imports a model within the same project
+- **THEN** the model is duplicated with a new ID, and core weights are copied to the new model's folder
+
+#### Scenario: Cross-project import attempted
+- **WHEN** a cross-project import is attempted
+- **THEN** the system returns an error: "Cross-project import is not yet supported"
+
+### Requirement: Same-project import only (Phase 1)
+The system SHALL support importing models within the same project only. Cross-project import is deferred.
+
+#### Scenario: Import within same project
+- **WHEN** the user imports a model within the same project
+- **THEN** the model is duplicated with a new ID, and core weights are copied to the new model's folder
+
+#### Scenario: Cross-project import attempted
+- **WHEN** a cross-project import is attempted
+- **THEN** the system returns an error: "Cross-project import is not yet supported"

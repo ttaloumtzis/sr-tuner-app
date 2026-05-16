@@ -66,7 +66,7 @@ def _add_dataset_model_run(project_id: str, project_root: Path, tmp_path: Path) 
     dataset_id = dataset.json()["project"]["datasets"][0]["id"]
     model = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "model", "scale": 4, "num_features": 32, "num_blocks": 4},
+        json={"name": "model", "num_features": 32, "num_blocks": 4},
         headers=auth_headers(),
     )
     assert model.status_code == 200
@@ -223,7 +223,7 @@ def test_backend_domain_view_endpoints_return_supported_or_unavailable_states(tm
     assert estimate.json()["low_pair_guard"]["code"] == "low_pair_count"
     assert estimate.json()["unsupported_losses"] == []
     assert estimate.json()["iterations_per_epoch"] >= 1
-    assert estimate.json()["vram_peak_bytes"] > 0
+    assert estimate.json()["vram_peak_bytes"] is None
 
     live = client.get(f"/projects/{project_id}/live/detail")
     assert live.status_code == 200

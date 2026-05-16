@@ -15,6 +15,7 @@ class StartupScreen extends StatefulWidget {
     required this.recentProjects,
     required this.onRefreshRecent,
     required this.onForgetRecent,
+    required this.onForgetAllRecent,
     required this.onCreate,
     required this.onOpen,
     this.onRetry,
@@ -26,6 +27,7 @@ class StartupScreen extends StatefulWidget {
   final List<RecentProject> recentProjects;
   final Future<void> Function() onRefreshRecent;
   final Future<void> Function(String path) onForgetRecent;
+  final Future<void> Function() onForgetAllRecent;
   final Future<void> Function(String parentPath, String name, {bool createHere})
   onCreate;
   final Future<void> Function(String path) onOpen;
@@ -128,6 +130,7 @@ class _StartupScreenState extends State<StartupScreen> {
                               setState(() => _filter = value),
                           onRefresh: widget.onRefreshRecent,
                           onForget: widget.onForgetRecent,
+                          onForgetAll: widget.onForgetAllRecent,
                           onOpen: widget.onOpen,
                         );
                         if (narrow) {
@@ -370,6 +373,7 @@ class _RecentColumn extends StatelessWidget {
     required this.onFilterChanged,
     required this.onRefresh,
     required this.onForget,
+    required this.onForgetAll,
     required this.onOpen,
   });
 
@@ -380,7 +384,26 @@ class _RecentColumn extends StatelessWidget {
   final ValueChanged<String> onFilterChanged;
   final Future<void> Function() onRefresh;
   final Future<void> Function(String path) onForget;
+  final Future<void> Function() onForgetAll;
   final Future<void> Function(String path) onOpen;
+
+  Future<void> _confirmForgetAll(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Clear all recent projects?'),
+        content: const Text('This removes all entries from the recent list. Your project files on disk are not affected.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await onForgetAll();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -388,10 +411,23 @@ class _RecentColumn extends StatelessWidget {
     return SrSection(
       title: 'Recent projects',
       subtitle: 'Filter local project folders before opening.',
-      trailing: IconButton(
-        tooltip: 'Refresh recent projects',
-        onPressed: busy ? null : onRefresh,
-        icon: const Icon(Icons.refresh),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (recentProjects.isNotEmpty)
+            Tooltip(
+              message: 'Clear all recent projects',
+              child: IconButton(
+                onPressed: busy ? null : () => _confirmForgetAll(context),
+                icon: const Icon(Icons.delete_sweep_outlined),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Refresh recent projects',
+            onPressed: busy ? null : onRefresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

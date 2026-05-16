@@ -101,6 +101,11 @@ class BackendClient {
     return RecentProjectsEnvelope.fromJson(response);
   }
 
+  Future<RecentProjectsEnvelope> forgetAllRecentProjects() async {
+    final response = await _delete('/projects/recent/all');
+    return RecentProjectsEnvelope.fromJson(response);
+  }
+
   Future<ProjectEnvelope> openRecentProject(String path) async {
     final response = await _post('/projects/recent/open', {'path': path});
     return ProjectEnvelope.fromJson(response);
@@ -276,13 +281,11 @@ class BackendClient {
   Future<ProjectEnvelope> createModel({
     required String projectId,
     required String name,
-    required int scale,
     required int numFeatures,
     required int numBlocks,
   }) async {
     final response = await _post('/projects/$projectId/models', {
       'name': name,
-      'scale': scale,
       'num_features': numFeatures,
       'num_blocks': numBlocks,
     });
@@ -299,23 +302,30 @@ class BackendClient {
     required String projectId,
     required String templateId,
     required String name,
-    required int scale,
+    int numFeatures = 32,
+    int numBlocks = 4,
   }) async {
     final response = await _post(
-      '/projects/$projectId/model-templates/$templateId/save-as-model?name=${Uri.encodeQueryComponent(name)}&scale=$scale',
+      '/projects/$projectId/model-templates/$templateId/save-as-model?name=${Uri.encodeQueryComponent(name)}&num_features=$numFeatures&num_blocks=$numBlocks',
       {},
     );
     return ProjectEnvelope.fromJson(response);
   }
 
-  Future<ProjectEnvelope> updateModelLr({
+  Future<ProjectEnvelope> updateModel({
     required String projectId,
     required String modelId,
-    required double lr,
+    String? name,
+    int? numFeatures,
+    int? numBlocks,
+    double? lr,
   }) async {
-    final response = await _put('/projects/$projectId/models/$modelId', {
-      'optimizer': {'type': 'adam', 'lr': lr, 'beta1': 0.9, 'beta2': 0.99},
-    });
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (numFeatures != null) body['num_features'] = numFeatures;
+    if (numBlocks != null) body['num_blocks'] = numBlocks;
+    if (lr != null) body['optimizer'] = {'type': 'adam', 'lr': lr, 'beta1': 0.9, 'beta2': 0.99};
+    final response = await _put('/projects/$projectId/models/$modelId', body);
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -324,6 +334,18 @@ class BackendClient {
     required String modelId,
   }) async {
     final response = await _delete('/projects/$projectId/models/$modelId');
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> duplicateModel({
+    required String projectId,
+    required String modelId,
+    required String name,
+  }) async {
+    final response = await _post(
+      '/projects/$projectId/models/$modelId/duplicate?name=${Uri.encodeQueryComponent(name)}',
+      {},
+    );
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -376,8 +398,10 @@ class BackendClient {
     required double l1Weight,
     required double perceptualWeight,
     required double adversarialWeight,
+    double? learningRate,
+    String? sourceCoreWeightsPath,
   }) async {
-    final response = await _post('/projects/$projectId/runs', {
+    final body = <String, dynamic>{
       'name': name,
       'dataset_id': datasetId,
       'model_id': modelId,
@@ -402,7 +426,10 @@ class BackendClient {
         'perceptual': perceptualWeight,
         'adversarial': adversarialWeight,
       },
-    });
+    };
+    if (learningRate != null) body['learning_rate'] = learningRate;
+    if (sourceCoreWeightsPath != null) body['source_core_weights_path'] = sourceCoreWeightsPath;
+    final response = await _post('/projects/$projectId/runs', body);
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -429,6 +456,27 @@ class BackendClient {
     required String runId,
   }) async {
     final response = await _post('/projects/$projectId/runs/$runId/pause', {});
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> resumeRun({
+    required String projectId,
+    required String runId,
+    String? checkpointId,
+    String? checkpointPath,
+  }) async {
+    final response = await _post('/projects/$projectId/runs/$runId/resume', {
+      if (checkpointId != null) 'checkpoint_id': checkpointId,
+      if (checkpointPath != null) 'checkpoint_path': checkpointPath,
+    });
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> syncRunJob({
+    required String projectId,
+    required String runId,
+  }) async {
+    final response = await _post('/projects/$projectId/runs/$runId/sync-job', {});
     return ProjectEnvelope.fromJson(response);
   }
 
@@ -624,8 +672,10 @@ class BackendClient {
 
   Future<InferenceRecord> runInference({
     required String projectId,
-    required String runId,
-    required String checkpointId,
+    String? runId,
+    String? checkpointId,
+    String? modelId,
+    int? outputScale,
     required String inputPath,
     String? outputDir,
     String outputFormat = 'png',
@@ -633,16 +683,22 @@ class BackendClient {
     String device = 'cpu',
     TileConfig? tileConfig,
   }) async {
-    final response = await _post('/projects/$projectId/inference', {
-      'run_id': runId,
-      'checkpoint_id': checkpointId,
+    final body = <String, dynamic>{
       'input_path': inputPath,
-      'output_dir': ?outputDir,
+      'output_dir': outputDir,
       'output_format': outputFormat,
       'mode': mode,
       'device': device,
       'tile_config': (tileConfig ?? TileConfig()).toJson(),
-    });
+    };
+    if (modelId != null) {
+      body['model_id'] = modelId;
+      body['output_scale'] = outputScale ?? 4;
+    } else {
+      body['run_id'] = runId ?? '';
+      body['checkpoint_id'] = checkpointId ?? '';
+    }
+    final response = await _post('/projects/$projectId/inference', body);
     return InferenceRecord.fromJson(response);
   }
 
@@ -697,15 +753,29 @@ class BackendClient {
       _addCommonHeaders(request);
       final response = await request.close();
       final text = await response.transform(utf8.decoder).join();
-      final decoded = text.isEmpty
-          ? <dynamic>[]
-          : jsonDecode(text) as List<dynamic>;
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Try to extract structured error before throwing
+        if (text.isNotEmpty) {
+          final body = jsonDecode(text);
+          if (body is Map<String, dynamic>) {
+            final error = body['error'];
+            if (error is Map<String, dynamic>) {
+              throw ApiException(
+                error['message']?.toString() ?? 'Backend request failed.',
+                statusCode: response.statusCode,
+                code: error['code']?.toString(),
+                details: error['details'] as Map<String, dynamic>? ?? const {},
+                recoverable: error['recoverable'] as bool? ?? true,
+              );
+            }
+          }
+        }
         throw ApiException(
           'Backend request failed.',
           statusCode: response.statusCode,
         );
       }
+      final decoded = text.isEmpty ? <dynamic>[] : jsonDecode(text) as List<dynamic>;
       _log.info(EventNames.requestComplete, 'GET $path (list) -> OK', context: {
         'method': 'GET', 'path': path, 'elapsed_ms': stopwatch.elapsedMilliseconds, 'count': decoded.length,
       });

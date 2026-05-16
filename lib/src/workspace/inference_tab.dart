@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 
 import '../backend_client.dart';
 import '../classic_components.dart' hide SrChip;
@@ -15,12 +18,14 @@ class InferenceTab extends StatefulWidget {
     required this.client,
     required this.project,
     this.initialCheckpointId,
+    this.onHandoffConsumed,
     super.key,
   });
 
   final BackendClient client;
   final ProjectState project;
   final String? initialCheckpointId;
+  final VoidCallback? onHandoffConsumed;
 
   @override
   State<InferenceTab> createState() => _InferenceTabState();
@@ -48,20 +53,18 @@ class _InferenceTabState extends State<InferenceTab> {
   int? _outputWidth;
   int? _outputHeight;
   
-  double _denoiseStrength = 0.6;
-  double _detailBoost = 0.35;
-  bool _colorPreserve = true;
-  
   bool _running = false;
   String? _error;
   InferenceRecord? _lastResult;
   
-  List<InferenceRecord> _recentResults = [];
-  
   InferenceReadiness? _readiness;
   InferenceInspector? _inspector;
   List<DeviceOption> _devices = [];
-  String _device = 'auto';
+  String _device = 'cpu';
+
+  String? _jobId;
+  double _jobProgress = 0.0;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -69,7 +72,6 @@ class _InferenceTabState extends State<InferenceTab> {
     _loadAggregate();
     _loadDevices();
     _loadReadiness();
-    _loadRecentResults();
     _loadInspector();
     if (widget.initialCheckpointId != null) {
       _preselectCheckpoint(widget.initialCheckpointId!);
@@ -132,16 +134,7 @@ class _InferenceTabState extends State<InferenceTab> {
     } catch (_) {}
   }
 
-  Future<void> _loadRecentResults() async {
-    try {
-      final env = await widget.client.listInferenceHistory(widget.project.id);
-      if (mounted) {
-        setState(() {
-          _recentResults = env.records.take(6).toList();
-        });
-      }
-    } catch (_) {}
-  }
+
 
   
   
@@ -159,6 +152,46 @@ class _InferenceTabState extends State<InferenceTab> {
 
     return Column(
       children: [
+        if (_error != null)
+          Material(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber, size: 16, color: Theme.of(context).colorScheme.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer))),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => setState(() => _error = null),
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (_readiness != null && !_readiness!.available)
+          Material(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber, size: 16, color: Theme.of(context).colorScheme.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _readiness!.message,
+                      style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         _InferenceHeader(
           selectedCheckpoint: _selectedCheckpoint,
           checkpoints: checkpoints,
@@ -183,9 +216,12 @@ class _InferenceTabState extends State<InferenceTab> {
             setState(() => _device = value);
           },
           onBatchFolder: _pickBatchFolder,
+          onSelectImage: _selectImage,
           onSaveResult: _saveResult,
           onRunInference: _runInference,
           running: _running,
+          jobProgress: _jobProgress,
+          onCancel: _cancelInference,
         ),
         Expanded(
           child: Row(
@@ -196,7 +232,7 @@ class _InferenceTabState extends State<InferenceTab> {
                   sliderMode: _sliderMode,
                   sliderPosition: _sliderPosition,
                   lastResult: _lastResult,
-                  recentResults: _recentResults,
+                  inputPath: _inputPath,
                   inspector: _inspector,
                   onModeChanged: (mode) {
                     setState(() => _sliderMode = mode);
@@ -204,10 +240,7 @@ class _InferenceTabState extends State<InferenceTab> {
                   onSliderChanged: (position) {
                     setState(() => _sliderPosition = position);
                   },
-                  onRecentSelected: (result) {
-                    setState(() => _lastResult = result);
-                  },
-                  onAddTile: _handleAddTile,
+
                 ),
               ),
               Container(
@@ -228,26 +261,15 @@ class _InferenceTabState extends State<InferenceTab> {
                   psnrGain: _psnrGain,
                   sharpnessGain: _sharpnessGain,
                   inferenceTime: _inferenceTime,
-                  denoiseStrength: _denoiseStrength,
-                  detailBoost: _detailBoost,
-                  colorPreserve: _colorPreserve,
                   inspector: _inspector,
+                  hasOutput: _lastResult?.outputPath != null,
                   onFormatChanged: (format) {
                     setState(() => _outputFormat = format);
                   },
                   onBitDepthChanged: (depth) {
                     setState(() => _bitDepth = depth);
                   },
-                  onDenoiseChanged: (strength) {
-                    setState(() => _denoiseStrength = strength);
-                  },
-                  onDetailBoostChanged: (boost) {
-                    setState(() => _detailBoost = boost);
-                  },
-                  onColorPreserveChanged: (preserve) {
-                    setState(() => _colorPreserve = preserve);
-                  },
-                  onBatchDrop: _handleBatchDrop,
+                  onSaveOutput: _saveResult,
                 ),
               ),
             ],
@@ -263,7 +285,12 @@ class _InferenceTabState extends State<InferenceTab> {
 
   Future<void> _runInference() async {
     if (_selectedCheckpoint == null || _inputPath.isEmpty) return;
-    setState(() => _running = true);
+    _stopPolling();
+    setState(() {
+      _running = true;
+      _jobId = null;
+      _jobProgress = 0.0;
+    });
     try {
       final result = await widget.client.runInference(
         projectId: widget.project.id,
@@ -278,10 +305,10 @@ class _InferenceTabState extends State<InferenceTab> {
       if (mounted) {
         setState(() {
           _running = false;
+          _jobProgress = 1.0;
           _lastResult = result;
         });
-        _loadInspector();
-        _loadRecentResults();
+        _startPolling(result.jobId);
       }
     } catch (e) {
       if (mounted) {
@@ -293,7 +320,31 @@ class _InferenceTabState extends State<InferenceTab> {
     }
   }
 
-  Future<void> _handleAddTile() async {
+  void _startPolling(String? jobId) {
+    if (jobId == null || jobId.isEmpty) return;
+    _jobId = jobId;
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      try {
+        final job = await widget.client.getJob(jobId);
+        if (!mounted) { _stopPolling(); return; }
+        setState(() => _jobProgress = job.progress);
+        if (job.isTerminal) _stopPolling();
+      } catch (_) { _stopPolling(); }
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _cancelInference() async {
+    final jobId = _jobId;
+    if (jobId == null) return;
+    try { await widget.client.cancelJob(jobId); } catch (_) {}
+  }
+
+  Future<void> _selectImage() async {
     final path = await const PathPicker().pickFile();
     if (path != null && mounted) {
       setState(() {
@@ -303,7 +354,6 @@ class _InferenceTabState extends State<InferenceTab> {
     }
   }
 
-// Helper methods
   Future<void> _pickBatchFolder() async {
     final path = await const PathPicker().pickFolder(confirmButtonText: 'Select batch folder');
     if (path != null && mounted) {
@@ -312,18 +362,39 @@ class _InferenceTabState extends State<InferenceTab> {
   }
 
   Future<void> _saveResult() async {
-    if (_lastResult == null) return;
-    final path = await const PathPicker().pickFolder(confirmButtonText: 'Save result here');
-    if (path != null && mounted) {
-      // TODO: Implement save result functionality
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Result saved to $path')),
-      );
+    final result = _lastResult;
+    if (result == null || result.outputPath == null || result.outputPath!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No result to save.')),
+        );
+      }
+      return;
     }
-  }
-
-  void _handleBatchDrop(String folderPath) {
-    setState(() => _inputPath = folderPath);
+    final destDir = await const PathPicker().pickFolder(confirmButtonText: 'Save result here');
+    if (destDir == null || !mounted) return;
+    try {
+      final src = File(result.outputPath!);
+      final filename = result.outputPath!.split('/').last;
+      final dest = '$destDir/$filename';
+      await src.copy(dest);
+      if (mounted) {
+        setState(() {
+          _inputPath = '';
+          _filename = '';
+          _lastResult = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved to $dest')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e')),
+        );
+      }
+    }
   }
 
   void _preselectCheckpoint(String checkpointId) {
@@ -333,7 +404,14 @@ class _InferenceTabState extends State<InferenceTab> {
     );
     if (mounted) {
       setState(() => _selectedCheckpoint = checkpoint);
+      widget.onHandoffConsumed?.call();
     }
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 }
 
@@ -354,9 +432,12 @@ class _InferenceHeader extends StatelessWidget {
     required this.onTileSizeChanged,
     required this.onDeviceChanged,
     required this.onBatchFolder,
+    required this.onSelectImage,
     required this.onSaveResult,
     required this.onRunInference,
     required this.running,
+    required this.jobProgress,
+    required this.onCancel,
   });
 
   final CheckpointSummary? selectedCheckpoint;
@@ -372,9 +453,12 @@ class _InferenceHeader extends StatelessWidget {
   final ValueChanged<int> onTileSizeChanged;
   final ValueChanged<String> onDeviceChanged;
   final VoidCallback onBatchFolder;
+  final VoidCallback onSelectImage;
   final VoidCallback onSaveResult;
   final VoidCallback onRunInference;
   final bool running;
+  final double jobProgress;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -436,30 +520,62 @@ class _InferenceHeader extends StatelessWidget {
           
           const Spacer(),
           
-          Row(
-            children: [
-              SrButton(
-                label: 'Batch folder…',
-                icon: Icons.folder,
-                onPressed: onBatchFolder,
-                size: SrButtonSize.sm,
-              ),
-              const SizedBox(width: 6),
-              SrButton(
-                label: 'Save result',
-                icon: Icons.download,
-                onPressed: onSaveResult,
-                size: SrButtonSize.sm,
-              ),
-              const SizedBox(width: 6),
-              SrButton(
-                label: running ? 'Running…' : 'Run Inference',
-                icon: Icons.play_arrow,
-                onPressed: running ? null : onRunInference,
-                size: SrButtonSize.sm,
-              ),
-            ],
-          ),
+          if (running)
+            Row(
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: SrProgressBar(
+                    value: jobProgress,
+                    kind: SrProgressKind.solid,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${(jobProgress * 100).toInt()}%',
+                  style: TextStyle(fontFamily: 'monospace', color: tokens.muted, fontSize: 12),
+                ),
+                const SizedBox(width: 8),
+                SrButton(
+                  label: 'Cancel',
+                  icon: Icons.stop,
+                  onPressed: onCancel,
+                  size: SrButtonSize.sm,
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                SrButton(
+                  label: 'Select image…',
+                  icon: Icons.image,
+                  onPressed: onSelectImage,
+                  size: SrButtonSize.sm,
+                ),
+                const SizedBox(width: 6),
+                SrButton(
+                  label: 'Batch folder…',
+                  icon: Icons.folder,
+                  onPressed: onBatchFolder,
+                  size: SrButtonSize.sm,
+                ),
+                const SizedBox(width: 6),
+                SrButton(
+                  label: 'Save result',
+                  icon: Icons.download,
+                  onPressed: onSaveResult,
+                  size: SrButtonSize.sm,
+                ),
+                const SizedBox(width: 6),
+                SrButton(
+                  label: 'Run Inference',
+                  icon: Icons.play_arrow,
+                  onPressed: onRunInference,
+                  size: SrButtonSize.sm,
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -613,8 +729,8 @@ class _TileField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        DropdownButtonFormField<Map<String, dynamic>>(
-          value: {'enabled': enabled, 'size': tileSize},
+        DropdownButtonFormField<int>(
+          value: enabled ? tileSize : 0,
           isExpanded: true,
           decoration: InputDecoration(
             isDense: true,
@@ -633,23 +749,14 @@ class _TileField extends StatelessWidget {
             ),
           ),
           items: [
-            {'enabled': false, 'size': 0},
-            {'enabled': true, 'size': 256},
-            {'enabled': true, 'size': 384},
-            {'enabled': true, 'size': 512},
-          ].map((option) {
-            final label = option['enabled'] as bool 
-                ? 'auto · ${option['size']}'
-                : 'off';
-            return DropdownMenuItem(
-              value: option,
-              child: Text(label, style: const TextStyle(fontFamily: 'monospace')),
-            );
-          }).toList(),
+            DropdownMenuItem(value: 0, child: Text('off', style: const TextStyle(fontFamily: 'monospace'))),
+            for (final size in [256, 384, 512])
+              DropdownMenuItem(value: size, child: Text('auto · $size', style: const TextStyle(fontFamily: 'monospace'))),
+          ],
           onChanged: (value) {
             if (value != null) {
-              onEnabledChanged(value['enabled'] as bool);
-              onSizeChanged(value['size'] as int);
+              onEnabledChanged(value != 0);
+              if (value != 0) onSizeChanged(value);
             }
           },
         ),
@@ -663,23 +770,19 @@ class _CompareViewer extends StatelessWidget {
     required this.sliderMode,
     required this.sliderPosition,
     required this.lastResult,
-    required this.recentResults,
+    required this.inputPath,
     required this.inspector,
     required this.onModeChanged,
     required this.onSliderChanged,
-    required this.onRecentSelected,
-    required this.onAddTile,
   });
 
   final bool sliderMode;
   final double sliderPosition;
   final InferenceRecord? lastResult;
-  final List<InferenceRecord> recentResults;
+  final String inputPath;
   final InferenceInspector? inspector;
   final ValueChanged<bool> onModeChanged;
   final ValueChanged<double> onSliderChanged;
-  final ValueChanged<InferenceRecord> onRecentSelected;
-  final VoidCallback onAddTile;
 
   @override
   Widget build(BuildContext context) {
@@ -739,128 +842,96 @@ class _CompareViewer extends StatelessWidget {
                     position: sliderPosition,
                     onPositionChanged: onSliderChanged,
                     lastResult: lastResult,
+                    inputPath: inputPath,
                   )
-                : _TwoUpViewer(lastResult: lastResult),
+                : _TwoUpViewer(lastResult: lastResult, inputPath: inputPath),
           ),
           
           const SizedBox(height: 10),
-          
-          // Recent filmstrip
-          _RecentFilmstrip(
-            results: recentResults,
-            selectedResult: lastResult,
-            onSelected: onRecentSelected,
-            onAddTile: onAddTile,
-            maxSlots: 12,
-          ),
         ],
       ),
     );
   }
 }
 
-class _SliderViewer extends StatelessWidget {
+class _SliderViewer extends StatefulWidget {
   const _SliderViewer({
     required this.position,
     required this.onPositionChanged,
     required this.lastResult,
+    required this.inputPath,
   });
 
   final double position;
   final ValueChanged<double> onPositionChanged;
   final InferenceRecord? lastResult;
+  final String inputPath;
 
+  @override
+  State<_SliderViewer> createState() => _SliderViewerState();
+}
+
+class _SliderViewerState extends State<_SliderViewer> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(tokens.radius),
-        border: Border.all(color: tokens.border),
-      ),
-      child: Stack(
-        children: [
-          // LR side (left)
-          Positioned.fill(
-            child: Container(
-              color: tokens.panelAlt,
-              child: const Center(
-                child: Text('LR · 480 × 320 (input)'),
-              ),
-            ),
-          ),
-          
-          // SR side (right, clipped)
-          Positioned.fill(
-            child: ClipRect(
-              clipper: _SliderClipper(position),
-              child: Container(
-                color: tokens.panel,
-                child: const Center(
-                  child: Text('SR · 1920 × 1280 (× 4 upscale)'),
-                ),
-              ),
-            ),
-          ),
-          
-          // Handle
-          Positioned(
-            left: position * MediaQuery.of(context).size.width * 0.6, // Approximate width
-            top: 0,
-            bottom: 0,
-            child: GestureDetector(
-              onPanUpdate: (details) {
-                final newPosition = (details.globalPosition.dx / MediaQuery.of(context).size.width * 0.6).clamp(0.0, 1.0);
-                onPositionChanged(newPosition);
+    final hasInput = widget.inputPath.isNotEmpty || (widget.lastResult?.inputPath.isNotEmpty ?? false);
+    final hasOutput = widget.lastResult?.outputPath != null;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(tokens.radius),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: tokens.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            return GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                widget.onPositionChanged((details.localPosition.dx / width).clamp(0.0, 1.0));
               },
-              child: Container(
-                width: 2,
-                color: tokens.accent,
-                child: Center(
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: tokens.accent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasInput)
+                    Image.file(
+                      File(widget.lastResult?.inputPath ?? widget.inputPath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Text('Input not found', style: TextStyle(color: tokens.muted)),
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Text('Select an image', style: TextStyle(color: tokens.muted)),
                     ),
-                    child: Icon(
-                      Icons.arrow_right,
-                      size: 11,
-                      color: Colors.white,
+                  if (hasOutput)
+                    ClipRect(
+                      clipper: _SliderClipper(widget.position),
+                      child: Image.file(
+                        File(widget.lastResult!.outputPath!),
+                        fit: BoxFit.contain,
+                      ),
                     ),
-                  ),
-                ),
+                  if (hasOutput)
+                    Positioned(
+                      left: widget.position * width - 1,
+                      top: 0,
+                      bottom: 0,
+                      width: 2,
+                      child: Container(color: tokens.accent),
+                    ),
+                  if (hasOutput) ...[
+                    Positioned(top: 6, left: 6, child: SrChip(label: 'BEFORE', kind: SrChipKind.default_)),
+                    Positioned(top: 6, right: 6, child: SrChip(label: 'AFTER', kind: SrChipKind.ok)),
+                  ],
+                ],
               ),
-            ),
-          ),
-          
-          // Labels
-          Positioned(
-            top: 8,
-            left: 8,
-            child: SrChip(
-              label: 'BEFORE',
-              kind: SrChipKind.default_,
-            ),
-          ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: SrChip(
-              label: 'AFTER',
-              kind: SrChipKind.ok,
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -885,151 +956,108 @@ class _SliderClipper extends CustomClipper<Rect> {
   bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => true;
 }
 
-class _TwoUpViewer extends StatelessWidget {
+class _TwoUpViewer extends StatefulWidget {
   const _TwoUpViewer({
     required this.lastResult,
+    required this.inputPath,
   });
 
   final InferenceRecord? lastResult;
+  final String inputPath;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).extension<SrTokens>()!.border),
-            ),
-            child: const Center(
-              child: Text('Before (LR)'),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).extension<SrTokens>()!.border),
-            ),
-            child: const Center(
-              child: Text('After (SR)'),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  State<_TwoUpViewer> createState() => _TwoUpViewerState();
 }
 
-class _RecentFilmstrip extends StatelessWidget {
-  const _RecentFilmstrip({
-    required this.results,
-    required this.selectedResult,
-    required this.onSelected,
-    required this.onAddTile,
-    required this.maxSlots,
-  });
+class _TwoUpViewerState extends State<_TwoUpViewer> {
+  final _transform = TransformationController();
+  bool _ctrlPressed = false;
 
-  final List<InferenceRecord> results;
-  final InferenceRecord? selectedResult;
-  final ValueChanged<InferenceRecord> onSelected;
-  final VoidCallback onAddTile;
-  final int maxSlots;
+  void _onScale(double scale) {
+    final current = _transform.value;
+    final newScale = (current.getMaxScaleOnAxis() * scale).clamp(1.0, 16.0);
+    _transform.value = Matrix4.diagonal3Values(newScale, newScale, 1);
+  }
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Recent',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: tokens.muted,
-              ),
-            ),
-            Text(
-              '${results.length} / $maxSlots',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: tokens.muted,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            ...List.generate(maxSlots, (index) {
-              if (index < results.length) {
-                final result = results[index];
-                final isSelected = result.id == selectedResult?.id;
-                return GestureDetector(
-                  onTap: () => onSelected(result),
-                  child: Container(
-                    width: 74,
-                    height: 50,
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isSelected ? tokens.accent : tokens.border,
-                        width: isSelected ? 2 : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                      color: tokens.panelAlt,
-                    ),
-                    child: Center(
-                      child: Text(
-                        isSelected ? 'now' : '${index + 1}',
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ),
-                );
-              } else if (index == results.length) {
-                return GestureDetector(
-                  onTap: onAddTile,
-                  child: Container(
-                    width: 74,
-                    height: 50,
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: tokens.accent,
-                        width: 2,
-                        style: BorderStyle.solid,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Center(
-                      child: Text('+ add', style: TextStyle(fontSize: 10, color: tokens.accent)),
-                    ),
-                  ),
-                );
-              } else {
-                return Container(
-                  width: 74,
-                  height: 50,
-                  margin: const EdgeInsets.only(right: 6),
+    final hasInput = widget.inputPath.isNotEmpty || (widget.lastResult?.inputPath.isNotEmpty ?? false);
+    final hasOutput = widget.lastResult?.outputPath != null;
+
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event.logicalKey == LogicalKeyboardKey.controlLeft ||
+            event.logicalKey == LogicalKeyboardKey.controlRight) {
+          setState(() => _ctrlPressed = event is KeyDownEvent);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent && _ctrlPressed) {
+            _onScale(event.scrollDelta.dy < 0 ? 1.1 : 0.9);
+          }
+        },
+        child: InteractiveViewer(
+          transformationController: _transform,
+          minScale: 1.0,
+          maxScale: 16.0,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: tokens.border, style: BorderStyle.solid),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(tokens.radius),
+                    border: Border.all(color: tokens.border),
                   ),
-                  child: const Center(
-                    child: Text('+ add', style: TextStyle(fontSize: 10)),
+                  clipBehavior: Clip.antiAlias,
+                  child: hasInput
+                      ? Image.file(
+                          File(widget.lastResult?.inputPath ?? widget.inputPath),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text('Input not found', style: TextStyle(color: tokens.muted)),
+                          ),
+                        )
+                      : Center(
+                          child: Text('Select an image', style: TextStyle(color: tokens.muted)),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(tokens.radius),
+                    border: Border.all(color: tokens.border),
                   ),
-                );
-              }
-            }),
-          ],
+                  clipBehavior: Clip.antiAlias,
+                  child: hasOutput
+                      ? Image.file(
+                          File(widget.lastResult!.outputPath!),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text('Output not found', style: TextStyle(color: tokens.muted)),
+                          ),
+                        )
+                      : Center(
+                          child: Text('No output yet', style: TextStyle(color: tokens.muted)),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1044,16 +1072,11 @@ class _OutputInspector extends StatelessWidget {
     required this.psnrGain,
     required this.sharpnessGain,
     required this.inferenceTime,
-    required this.denoiseStrength,
-    required this.detailBoost,
-    required this.colorPreserve,
     required this.inspector,
+    required this.hasOutput,
     required this.onFormatChanged,
     required this.onBitDepthChanged,
-    required this.onDenoiseChanged,
-    required this.onDetailBoostChanged,
-    required this.onColorPreserveChanged,
-    required this.onBatchDrop,
+    required this.onSaveOutput,
   });
 
   final String outputFormat;
@@ -1064,16 +1087,11 @@ class _OutputInspector extends StatelessWidget {
   final double? psnrGain;
   final double? sharpnessGain;
   final double? inferenceTime;
-  final double denoiseStrength;
-  final double detailBoost;
-  final bool colorPreserve;
   final InferenceInspector? inspector;
+  final bool hasOutput;
   final ValueChanged<String> onFormatChanged;
   final ValueChanged<int> onBitDepthChanged;
-  final ValueChanged<double> onDenoiseChanged;
-  final ValueChanged<double> onDetailBoostChanged;
-  final ValueChanged<bool> onColorPreserveChanged;
-  final Function(String) onBatchDrop;
+  final VoidCallback onSaveOutput;
 
   @override
   Widget build(BuildContext context) {
@@ -1084,11 +1102,6 @@ class _OutputInspector extends StatelessWidget {
     final sharpnessGainVal = inspectorData['sharpness_gain'] as double?;
     final psnrGainVal = inspectorData['psnr_gain'] as double?;
     final runtimeVal = inspectorData['runtime_seconds'] as double?;
-    final tuning = inspector?.tuning ?? {};
-    
-    final denoiseSupport = tuning['denoise_strength'];
-    final detailSupport = tuning['detail_boost'];
-    final colorSupport = tuning['color_preserve'];
     
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1107,14 +1120,14 @@ class _OutputInspector extends StatelessWidget {
                 ),
                 _Field(
                   label: 'Format',
-                  value: '$outputFormat · $bitDepthVal bit',
+                  value: '${outputFormat.toUpperCase()} · $bitDepthVal bit',
                   mono: true,
                   hasDropdown: true,
                   onDropdownChanged: (value) {
                     if (value != null) {
                       final parts = value.split(' · ');
                       if (parts.length >= 2) {
-                        onFormatChanged(parts[0]);
+                        onFormatChanged(parts[0].toLowerCase());
                         onBitDepthChanged(int.parse(parts[1].split(' ')[0]));
                       }
                     }
@@ -1124,6 +1137,13 @@ class _OutputInspector extends StatelessWidget {
                   label: 'Filename',
                   value: filename.isEmpty ? '—' : filename,
                   mono: true,
+                ),
+                const SizedBox(height: 8),
+                SrButton(
+                  label: 'Save output',
+                  icon: Icons.download,
+                  onPressed: hasOutput ? onSaveOutput : null,
+                  size: SrButtonSize.sm,
                 ),
               ],
             ),
@@ -1157,36 +1177,9 @@ class _OutputInspector extends StatelessWidget {
             ),
           ),
           
-          _InspectorSection(
-            title: 'Tuning',
-            child: Column(
-              children: [
-                _TuningControl(
-                  label: 'Denoise strength',
-                  value: denoiseStrength,
-                  onChanged: denoiseSupport?.supported == false ? null : onDenoiseChanged,
-                  unavailable: denoiseSupport?.supported == false,
-                ),
-                _TuningControl(
-                  label: 'Detail boost',
-                  value: detailBoost,
-                  onChanged: detailSupport?.supported == false ? null : onDetailBoostChanged,
-                  unavailable: detailSupport?.supported == false,
-                ),
-                _TuningControl(
-                  label: 'Color preserve',
-                  value: colorPreserve ? 1.0 : 0.0,
-                  onChanged: (value) => onColorPreserveChanged(value > 0.5),
-                  unavailable: colorSupport?.supported == false,
-                ),
-              ],
-            ),
-          ),
+
           
-          _InspectorSection(
-            title: 'Batch',
-            child: _BatchDropZone(onDrop: onBatchDrop),
-          ),
+
         ],
       ),
     );
@@ -1340,98 +1333,6 @@ class _QualityRow extends StatelessWidget {
               fontFamily: 'monospace',
               color: valueColor,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TuningControl extends StatelessWidget {
-  const _TuningControl({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.unavailable = false,
-  });
-
-  final String label;
-  final double value;
-  final ValueChanged<double>? onChanged;
-  final bool unavailable;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<SrTokens>()!;
-    
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: unavailable ? tokens.muted.withValues(alpha: 0.5) : tokens.muted,
-                ),
-              ),
-              Text(
-                value.toStringAsFixed(2),
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  color: unavailable ? tokens.muted.withValues(alpha: 0.5) : null,
-                ),
-              ),
-            ],
-          ),
-        ),
-        SrProgressBar(
-          value: unavailable ? 0.0 : value,
-          kind: SrProgressKind.solid,
-        ),
-      ],
-    );
-  }
-}
-
-class _BatchDropZone extends StatelessWidget {
-  const _BatchDropZone({
-    required this.onDrop,
-  });
-
-  final Function(String) onDrop;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<SrTokens>()!;
-    
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: tokens.panelAlt,
-        border: Border.all(
-          color: tokens.border,
-          style: BorderStyle.solid,
-        ),
-        borderRadius: BorderRadius.circular(tokens.radius),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.cloud_upload,
-            size: 14,
-            color: tokens.muted,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Drop a folder to process all',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.muted,
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -1905,463 +1806,3 @@ class _SettingsPanel extends StatelessWidget {
 }
 
 // ── Result / preview panel ─────────────────────────────────────────────────────
-
-class _ResultPanel extends StatefulWidget {
-  const _ResultPanel({
-    required this.result,
-    required this.inputPath,
-    required this.running,
-    required this.history,
-    required this.onHistorySelected,
-  });
-
-  final InferenceRecord? result;
-  final String inputPath;
-  final bool running;
-  final List<InferenceRecord> history;
-  final ValueChanged<InferenceRecord> onHistorySelected;
-
-  @override
-  State<_ResultPanel> createState() => _ResultPanelState();
-}
-
-class _ResultPanelState extends State<_ResultPanel> {
-  String _previewMode = 'split';
-
-  @override
-  Widget build(BuildContext context) {
-    final result = widget.result;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (result != null) ...[
-          _PreviewControls(
-            mode: _previewMode,
-            onModeChanged: (v) => setState(() => _previewMode = v),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            flex: 3,
-            child: _buildPreview(result),
-          ),
-          const SizedBox(height: 8),
-          _ResultInfo(result: result),
-        ] else if (widget.running) ...[
-          const Expanded(
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        ] else ...[
-          const Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.compare, size: 48, color: Colors.white24),
-                  SizedBox(height: 12),
-                  Text('Run inference to see results here.', style: TextStyle(color: Colors.white38)),
-                ],
-              ),
-            ),
-          ),
-        ],
-        if (widget.history.isNotEmpty) ...[
-          const Divider(),
-          SizedBox(
-            height: 100,
-            child: _HistoryList(
-              history: widget.history,
-              selected: result,
-              onSelected: widget.onHistorySelected,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPreview(InferenceRecord result) {
-    final outputPath = result.outputPath;
-    if (outputPath == null) {
-      if (result.mode == 'batch') {
-        return _BatchResultSummary(result: result);
-      }
-      return const Center(child: Text('No output preview available.', style: TextStyle(color: Colors.white38)));
-    }
-
-    if (_previewMode == 'split') {
-      return BeforeAfterComparison(
-        inputPath: result.inputPath,
-        outputPath: outputPath,
-      );
-    }
-
-    return _SideBySidePreview(inputPath: result.inputPath, outputPath: outputPath);
-  }
-}
-
-class _PreviewControls extends StatelessWidget {
-  const _PreviewControls({required this.mode, required this.onModeChanged});
-
-  final String mode;
-  final ValueChanged<String> onModeChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text('Preview:', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white54)),
-        const SizedBox(width: 8),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'split', label: Text('Split'), icon: Icon(Icons.compare, size: 14)),
-            ButtonSegment(value: 'side', label: Text('Side by side'), icon: Icon(Icons.view_column, size: 14)),
-          ],
-          selected: {mode},
-          onSelectionChanged: (s) => onModeChanged(s.first),
-        ),
-      ],
-    );
-  }
-}
-
-class _ResultInfo extends StatelessWidget {
-  const _ResultInfo({required this.result});
-
-  final InferenceRecord result;
-
-  @override
-  Widget build(BuildContext context) {
-    final successes = result.perFileResults.where((r) => r.status == 'success').length;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            _chip(Icons.check_circle, '${result.scale}×', const Color(0xff58c48a)),
-            const SizedBox(width: 12),
-            _chip(Icons.timer, '${result.runtimeSeconds.toStringAsFixed(1)}s', Colors.white54),
-            const SizedBox(width: 12),
-            _chip(Icons.folder_open, result.mode == 'batch' ? '$successes / ${result.perFileResults.length}' : '1/1', Colors.white54),
-            const SizedBox(width: 12),
-            Expanded(child: Text(result.outputDir ?? result.outputPath ?? '', style: const TextStyle(color: Colors.white38, fontSize: 11), overflow: TextOverflow.ellipsis)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _statusColor(result.status).withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(result.status, style: TextStyle(color: _statusColor(result.status), fontSize: 12)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(IconData icon, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(color: color, fontSize: 12)),
-      ],
-    );
-  }
-
-  Color _statusColor(String status) {
-    return switch (status) {
-      'completed' => const Color(0xff58c48a),
-      'partial' => const Color(0xffffc857),
-      _ => Colors.redAccent,
-    };
-  }
-}
-
-class _BatchResultSummary extends StatelessWidget {
-  const _BatchResultSummary({required this.result});
-
-  final InferenceRecord result;
-
-  @override
-  Widget build(BuildContext context) {
-    final successes = result.perFileResults.where((r) => r.status == 'success').toList();
-    final failures = result.perFileResults.where((r) => r.status == 'failed').toList();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Batch results', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Text('${successes.length} succeeded, ${failures.length} failed', style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView(
-                children: [
-                  for (final r in result.perFileResults)
-                    ListTile(
-                      dense: true,
-                      leading: Icon(
-                        r.status == 'success' ? Icons.check_circle : Icons.error,
-                        size: 16,
-                        color: r.status == 'success' ? const Color(0xff58c48a) : Colors.redAccent,
-                      ),
-                      title: Text(r.filename, style: const TextStyle(fontSize: 12)),
-                      subtitle: r.error != null ? Text(r.error!, style: const TextStyle(fontSize: 11, color: Colors.redAccent)) : null,
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Before/after comparison ────────────────────────────────────────────────────
-
-class BeforeAfterComparison extends StatefulWidget {
-  const BeforeAfterComparison({
-    required this.inputPath,
-    required this.outputPath,
-    super.key,
-  });
-
-  final String inputPath;
-  final String outputPath;
-
-  @override
-  State<BeforeAfterComparison> createState() => _BeforeAfterComparisonState();
-}
-
-class _BeforeAfterComparisonState extends State<BeforeAfterComparison> {
-  double _splitFraction = 0.5;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final totalWidth = constraints.maxWidth;
-          final splitX = totalWidth * _splitFraction;
-
-          return GestureDetector(
-            onHorizontalDragUpdate: (d) {
-              setState(() {
-                _splitFraction = (_splitFraction + d.delta.dx / totalWidth).clamp(0.02, 0.98);
-              });
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Right side: SR output
-                _InferenceImage(path: widget.outputPath),
-                // Left side: LR input, clipped
-                ClipRect(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: _splitFraction,
-                    child: SizedBox(
-                      width: totalWidth,
-                      child: _InferenceImage(path: widget.inputPath),
-                    ),
-                  ),
-                ),
-                // Divider line
-                Positioned(
-                  left: splitX - 1,
-                  top: 0,
-                  bottom: 0,
-                  width: 2,
-                  child: Container(color: Colors.white70),
-                ),
-                // Drag handle
-                Positioned(
-                  left: splitX - 14,
-                  top: 0,
-                  bottom: 0,
-                  width: 28,
-                  child: const Center(
-                    child: Icon(Icons.drag_indicator, color: Colors.white70, size: 20),
-                  ),
-                ),
-                // Labels
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  child: _label('Before (LR)'),
-                ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: _label('After (SR)'),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _label(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(text, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-    );
-  }
-}
-
-class _InferenceImage extends StatelessWidget {
-  const _InferenceImage({required this.path});
-
-  final String path;
-
-  @override
-  Widget build(BuildContext context) {
-    final file = File(path);
-    if (!file.existsSync()) {
-      return const Center(child: Text('File not found', style: TextStyle(color: Colors.white38)));
-    }
-    return InteractiveViewer(
-      child: Image.file(file, fit: BoxFit.contain),
-    );
-  }
-}
-
-class _SideBySidePreview extends StatelessWidget {
-  const _SideBySidePreview({
-    required this.inputPath,
-    required this.outputPath,
-  });
-
-  final String inputPath;
-  final String outputPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('Before (LR)', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                ),
-                Expanded(child: _InferenceImage(path: inputPath)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('After (SR)', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                ),
-                Expanded(child: _InferenceImage(path: outputPath)),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── History list ───────────────────────────────────────────────────────────────
-
-class _HistoryList extends StatelessWidget {
-  const _HistoryList({
-    required this.history,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<InferenceRecord> history;
-  final InferenceRecord? selected;
-  final ValueChanged<InferenceRecord> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Text('History', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.white54)),
-          ),
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: history.length,
-              itemBuilder: (context, index) {
-                final r = history[index];
-                final isSelected = r.id == selected?.id;
-                return GestureDetector(
-                  onTap: () => onSelected(r),
-                  child: Container(
-                    width: 130,
-                    margin: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white12 : Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: isSelected ? Colors.white38 : Colors.transparent),
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.inputPath.split('/').last,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        const SizedBox(height: 4),
-                        Text('×${r.scale}  ${r.runtimeSeconds.toStringAsFixed(1)}s', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _statusColor(r.status).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: Text(r.status, style: TextStyle(color: _statusColor(r.status), fontSize: 10)),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _statusColor(String status) {
-    return switch (status) {
-      'completed' => const Color(0xff58c48a),
-      'partial' => const Color(0xffffc857),
-      _ => Colors.redAccent,
-    };
-  }
-}

@@ -110,9 +110,43 @@ The system SHALL track whether a model is untrained or trained based on the pres
 - **WHEN** a run completes with a best checkpoint and core weights are extracted
 - **THEN** the model's trained_core_weights_path is populated and status is "trained"
 
+#### Scenario: Subsequent training completes
+- **WHEN** a subsequent training run for the same model completes successfully
+- **THEN** the backend extracts core weights from the new best checkpoint and overwrites trained_core_weights_path
+
+#### Scenario: Core weight extraction process
+- **WHEN** core weights are extracted from a checkpoint for architecture "internal_residual_pixelshuffle"
+- **THEN** the first convolution layer (3 to num_features) and last convolution layer (num_features to num_features*scale*scale with pixel shuffle) are excluded
+- **AND** only body layers (residual blocks) are kept in core weights
+
+#### Scenario: No best checkpoint available
+- **WHEN** training completes but no checkpoint has the "best_psnr" tag
+- **THEN** the backend falls back to the "latest" checkpoint for extraction
+
+#### Scenario: Core weights are stored
+- **WHEN** core weights are extracted
+- **THEN** they are saved to project_root/models/<model_id>/core_weights/best_core.pth with a metadata JSON sidecar
+
+#### Scenario: Trained model is deleted
+- **WHEN** a trained model is deleted
+- **THEN** the core weights folder is also deleted
+
+#### Scenario: Model is untrained
+- **WHEN** a model has no trained_core_weights_path
+- **THEN** the model status is "untrained" and cannot be used for model-based inference
+
 #### Scenario: Trained model is used for inference
 - **WHEN** inference is requested with a trained model
-- **THEN** core weights are loaded and scale-agnostic inference proceeds with user-specified output scale
+- **THEN** core weights are loaded from trained_core_weights_path and the backend constructs input layer (3 to num_features) and output layer (num_features to 3 with specified scale) dynamically
+- **AND** the output scale can differ from the training scale
+
+#### Scenario: Core weights file is missing
+- **WHEN** inference is requested but trained_core_weights_path is empty or file is missing
+- **THEN** inference fails with clear error that model has no trained weights
+
+#### Scenario: Output scale is set at inference
+- **WHEN** inference request includes output_scale parameter
+- **THEN** the output layer is constructed with that scale regardless of training scale
 
 #### Scenario: Trained model is used for fine-tuning
 - **WHEN** a run is created using a trained model
@@ -128,3 +162,78 @@ The system SHALL derive model scale from the selected dataset, not from the mode
 #### Scenario: Legacy model with dataset
 - **WHEN** a user creates a run with a legacy model (has scale in config)
 - **THEN** the dataset scale must match the model's stored scale (backward compatible check)
+
+### Requirement: Importing models with weights
+The system SHALL allow importing a model template that copies both configuration and trained core weights to create a new usable model.
+
+#### Scenario: User imports trained model
+- **WHEN** the user imports a trained model
+- **THEN** a new model is created with copied configuration and core weights copied to the new model's folder
+
+#### Scenario: Import source has no core weights
+- **WHEN** the import source model has no trained_core_weights_path
+- **THEN** import creates a new model with only the configuration (untrained), same as before
+
+#### Scenario: Core weights are copied (not referenced)
+- **WHEN** import copies a trained model
+- **THEN** the core weights file is duplicated to the new model's folder, not symlinked
+
+#### Scenario: Imported model is used
+- **WHEN** inference runs on an imported trained model
+- **THEN** the inference uses the copied core weights in the new project's folder
+
+### Requirement: Import metadata tracking
+The system SHALL track the original model ID when importing to maintain provenance.
+
+#### Scenario: Import completes
+- **WHEN** a model is imported with weights
+- **THEN** the new model's metadata includes original_model_id pointing to the source model
+
+### Requirement: Import UI feedback
+The system SHALL indicate in the UI whether an import will include weights or be configuration-only.
+
+#### Scenario: Importing trained model
+- **WHEN** user clicks import on a trained model
+- **THEN** the UI shows "Import with trained weights" or similar indicator
+
+#### Scenario: Importing untrained model
+- **WHEN** user clicks import on an untrained model
+- **THEN** the UI shows "Import configuration only" since no weights exist
+
+### Requirement: Same-project import only (Phase 1)
+The system SHALL support importing models within the same project only. Cross-project import is deferred.
+
+#### Scenario: Import within same project
+- **WHEN** the user imports a model within the same project
+- **THEN** the model is duplicated with a new ID, and core weights are copied to the new model's folder
+
+#### Scenario: Cross-project import attempted
+- **WHEN** a cross-project import is attempted
+- **THEN** the system returns an error: "Cross-project import is not yet supported"
+
+### Requirement: Training session consumed into model history
+The system SHALL consume successful training runs into the model's train_history, preserving all checkpoints and metrics under the model.
+
+#### Scenario: Training completes successfully
+- **WHEN** a training run completes successfully
+- **THEN** the run's checkpoints, metrics, and dataset info are packaged into a TrainHistoryEntry
+- **AND** appended to model.train_history
+- **AND** the run is removed from active run management (only failed/interrupted runs remain visible)
+
+#### Scenario: Training fails
+- **WHEN** training fails or is cancelled
+- **THEN** no TrainHistoryEntry is created
+- **AND** the run remains visible for debugging
+
+### Requirement: Checkpoint-based inference retained
+The system SHALL retain the existing checkpoint-based inference path for version comparison across training runs.
+
+#### Scenario: User compares old vs new weights
+- **WHEN** the user selects a specific checkpoint (not the model-based path)
+- **THEN** the backend loads the full state_dict from the checkpoint (old behavior)
+- **AND** the scale is fixed to the checkpoint's training scale
+- **AND** the inference result is comparable to model-based inference at the same scale
+
+#### Scenario: Checkpoint tab shows extraction status
+- **WHEN** a checkpoint is the one that was auto-extracted for core weights
+- **THEN** the checkpoint tab shows a badge: "Core weights extracted" or "★ Best"

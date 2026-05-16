@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../backend_client.dart';
-import '../classic_components.dart';
+import '../classic_components.dart' hide SrChip;
+import '../classic_theme.dart';
+import '../design_system/sr_chip.dart';
 import '../project_models.dart';
 
 class ModelTab extends StatefulWidget {
@@ -9,25 +11,34 @@ class ModelTab extends StatefulWidget {
     required this.client,
     required this.project,
     required this.onProjectChanged,
+    this.onNavigateToTab,
     super.key,
   });
 
   final BackendClient client;
   final ProjectState project;
   final ValueChanged<ProjectState> onProjectChanged;
+  final void Function(int)? onNavigateToTab;
 
   @override
   State<ModelTab> createState() => _ModelTabState();
 }
 
 class _ModelTabState extends State<ModelTab> {
-  final _name = TextEditingController(text: 'internal_x4');
+  final _nameCtrl = TextEditingController(text: 'internal');
+  final _featuresCtrl = TextEditingController(text: '32');
+  final _blocksCtrl = TextEditingController(text: '4');
   ModelTemplateCatalog? _catalog;
   ModelTemplate? _selected;
-  String _filter = 'all';
-  int _scale = 4;
   bool _busy = false;
   String? _error;
+  bool _createMode = false;
+
+  int _features = 32;
+  int _blocks = 4;
+
+  String? _editingModelId;
+  final _editNameCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -37,7 +48,10 @@ class _ModelTabState extends State<ModelTab> {
 
   @override
   void dispose() {
-    _name.dispose();
+    _nameCtrl.dispose();
+    _featuresCtrl.dispose();
+    _blocksCtrl.dispose();
+    _editNameCtrl.dispose();
     super.dispose();
   }
 
@@ -47,88 +61,112 @@ class _ModelTabState extends State<ModelTab> {
       if (mounted) {
         setState(() {
           _catalog = catalog;
-          _selected = catalog.templates.isEmpty
-              ? null
-              : catalog.templates.first;
+          _selected = catalog.templates.isEmpty ? null : catalog.templates.first;
           final template = _selected;
-          if (template != null && template.supportedScales.isNotEmpty) {
-            _scale = template.supportedScales.first;
-            _name.text = '${template.id}_x$_scale';
-          }
+          if (template != null) _nameCtrl.text = template.id;
         });
       }
     } catch (error) {
-      if (mounted) {
-        setState(() => _error = error.toString());
-      }
+      if (mounted) setState(() => _error = error.toString());
     }
+  }
+
+  void _switchToCreate() {
+    setState(() {
+      _createMode = true;
+      _editingModelId = null;
+    });
+  }
+
+  void _switchToManage() {
+    setState(() {
+      _createMode = false;
+      _editingModelId = null;
+    });
+  }
+
+  void _selectTemplate(ModelTemplate template) {
+    setState(() {
+      _selected = template;
+      _nameCtrl.text = template.id;
+      _createMode = true;
+      _editingModelId = null;
+    });
   }
 
   Future<void> _saveAsModel() async {
     final template = _selected;
-    if (template == null) {
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (template == null) return;
+    setState(() { _busy = true; _error = null; });
     try {
       final envelope = await widget.client.saveTemplateAsModel(
         projectId: widget.project.id,
         templateId: template.id,
-        name: _name.text.trim(),
-        scale: _scale,
+        name: _nameCtrl.text.trim(),
+        numFeatures: _features,
+        numBlocks: _blocks,
       );
       widget.onProjectChanged(envelope.project);
+      setState(() => _createMode = false);
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _deleteModel(ModelSummary model) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text('Delete ${model.name}?'),
-        content: const Text(
-          'This removes the model configuration from the project. Existing run artifacts and checkpoints are left untouched.',
-        ),
+        content: const Text('This removes the model configuration. Existing run artifacts and checkpoints remain intact.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete model'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete model')),
         ],
       ),
     );
-    if (confirmed != true) {
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (confirmed != true) return;
+    setState(() { _busy = true; _error = null; });
     try {
       final envelope = await widget.client.deleteModel(
-        projectId: widget.project.id,
-        modelId: model.id,
+        projectId: widget.project.id, modelId: model.id,
       );
       widget.onProjectChanged(envelope.project);
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _duplicateModel(ModelSummary model) async {
+    final name = '${model.name} (copy)';
+    setState(() { _busy = true; _error = null; });
+    try {
+      final envelope = await widget.client.duplicateModel(
+        projectId: widget.project.id, modelId: model.id, name: name,
+      );
+      widget.onProjectChanged(envelope.project);
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _renameModel(ModelSummary model, String newName) async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final envelope = await widget.client.updateModel(
+        projectId: widget.project.id, modelId: model.id, name: newName.trim(),
+      );
+      widget.onProjectChanged(envelope.project);
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() { _busy = false; _editingModelId = null; });
     }
   }
 
@@ -147,52 +185,83 @@ class _ModelTabState extends State<ModelTab> {
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 390,
-                  child: _TemplateList(
-                    catalog: catalog,
-                    selected: _selected,
-                    filter: _filter,
-                    onFilter: (value) => setState(() => _filter = value),
-                    onSelect: (template) => setState(() {
-                      _selected = template;
-                      if (template.supportedScales.isNotEmpty) {
-                        _scale = template.supportedScales.first;
-                      }
-                      _name.text = '${template.id}_x$_scale';
-                    }),
-                  ),
-                ),
+                SizedBox(width: 300, child: _ArchitectureSidebar(
+                  catalog: catalog,
+                  selected: _selected,
+                  onSelect: _selectTemplate,
+                )),
                 SizedBox(width: tokens.gap),
                 Expanded(
-                  child: _TemplateDetail(
-                    template: _selected,
-                    existingModels: widget.project.models,
-                    name: _name,
-                    scale: _scale,
-                    busy: _busy,
-                    error: _error,
-                    onScale: (value) => setState(() {
-                      _scale = value;
-                      final template = _selected;
-                      if (template != null) {
-                        _name.text = '${template.id}_x$_scale';
-                      }
-                    }),
-                    onReset: () {
-                      final template = _selected;
-                      if (template == null) {
-                        return;
-                      }
-                      setState(() {
-                        if (template.supportedScales.isNotEmpty) {
-                          _scale = template.supportedScales.first;
-                        }
-                        _name.text = '${template.id}_x$_scale';
-                      });
-                    },
-                    onSave: _saveAsModel,
-                    onDeleteModel: _deleteModel,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          SegmentedButton<bool>(
+                            segments: const [
+                              ButtonSegment(value: false, label: Text('Manage')),
+                              ButtonSegment(value: true, label: Text('Create')),
+                            ],
+                            selected: {_createMode},
+                            onSelectionChanged: (v) {
+                              if (v.first) { _switchToCreate(); }
+                              else { _switchToManage(); }
+                            },
+                          ),
+                          const Spacer(),
+                          if (_error != null)
+                            Flexible(child: SrBanner(message: _error!, severity: 'error')),
+                        ],
+                      ),
+                      SizedBox(height: tokens.compactGap),
+                      Expanded(
+                        child: _createMode
+                            ? _CreatePanel(
+                                name: _nameCtrl,
+                                featuresCtrl: _featuresCtrl,
+                                blocksCtrl: _blocksCtrl,
+                                features: _features,
+                                blocks: _blocks,
+                                busy: _busy,
+                                onFeaturesChanged: (v) => setState(() { _features = v; _featuresCtrl.text = v.toString(); }),
+                                onFeaturesTextChanged: (t) {
+                                  final v = int.tryParse(t);
+                                  if (v != null && v >= 8 && v <= 256) setState(() => _features = v);
+                                },
+                                onBlocksChanged: (v) => setState(() { _blocks = v; _blocksCtrl.text = v.toString(); }),
+                                onBlocksTextChanged: (t) {
+                                  final v = int.tryParse(t);
+                                  if (v != null && v >= 1 && v <= 64) setState(() => _blocks = v);
+                                },
+                                onSave: _saveAsModel,
+                                onReset: () => setState(() {
+                                  _features = 32;
+                                  _blocks = 4;
+                                  _featuresCtrl.text = '32';
+                                  _blocksCtrl.text = '4';
+                                  final t = _selected;
+                                  if (t != null) _nameCtrl.text = t.id;
+                                }),
+                              )
+                            : _ManagePanel(
+                                models: widget.project.models,
+                                busy: _busy,
+                                editingModelId: _editingModelId,
+                                editNameCtrl: _editNameCtrl,
+                                onStartRename: (model) {
+                                  _editNameCtrl.text = model.name;
+                                  setState(() => _editingModelId = model.id);
+                                },
+                                onCancelRename: () => setState(() => _editingModelId = null),
+                                onConfirmRename: (model) => _renameModel(model, _editNameCtrl.text),
+                                onDelete: _deleteModel,
+                                onDuplicate: _duplicateModel,
+                                runs: widget.project.runs,
+                                onTrain: (model) => widget.onNavigateToTab?.call(3),
+                                onNavigateToTab: widget.onNavigateToTab,
+                              ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -201,261 +270,203 @@ class _ModelTabState extends State<ModelTab> {
   }
 }
 
-class _TemplateList extends StatelessWidget {
-  const _TemplateList({
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+
+class _ArchitectureSidebar extends StatelessWidget {
+  const _ArchitectureSidebar({
     required this.catalog,
     required this.selected,
-    required this.filter,
-    required this.onFilter,
     required this.onSelect,
   });
 
   final ModelTemplateCatalog catalog;
   final ModelTemplate? selected;
-  final String filter;
-  final ValueChanged<String> onFilter;
   final ValueChanged<ModelTemplate> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    final filters = ['all', ...catalog.filters.values.expand((items) => items)];
-    final deduped = filters.toSet().toList();
-    final templates = catalog.templates.where((template) {
-      if (filter == 'all') {
-        return true;
-      }
-      return template.bestFor == filter ||
-          template.speedLabel == filter ||
-          template.supportState == filter;
-    }).toList();
-    return SrSection(
-      title: 'Templates',
-      subtitle: 'Metadata-first catalog with support guards',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SrSection(
+          title: 'Architectures',
+          subtitle: 'Supported model architectures',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final item in deduped)
-                ChoiceChip(
-                  label: Text(item),
-                  selected: filter == item,
-                  onSelected: (_) => onFilter(item),
+              for (final template in catalog.templates)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () => onSelect(template),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: selected?.id == template.id
+                          ? BoxDecoration(border: Border.all(color: tokens.accent, width: 2), borderRadius: BorderRadius.circular(tokens.radius))
+                          : null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(template.supportState == 'supported' ? Icons.memory : Icons.lock_outline, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(template.displayName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                              SrChip(
+                                label: template.supportState,
+                                kind: template.supportState == 'supported' ? SrChipKind.ok : SrChipKind.warn,
+                                size: SrChipSize.sm,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(child: _specChip(tokens, 'Params', template.parameterCount == null ? '?' : _formatCount(template.parameterCount!))),
+                            const SizedBox(width: 6),
+                            Expanded(child: _specChip(tokens, 'VRAM', template.vramEstimate)),
+                          ]),
+                          const SizedBox(height: 6),
+                          if (template.bestFor.isNotEmpty)
+                            Text(template.bestFor, style: TextStyle(fontSize: 11, color: tokens.muted)),
+                          const SizedBox(height: 4),
+                          SrChip(
+                            label: 'scale-agnostic',
+                            kind: SrChipKind.accent,
+                            size: SrChipSize.sm,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
-          SizedBox(height: tokens.compactGap),
-          for (final template in templates)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                selected: selected?.id == template.id,
-                enabled: true,
-                leading: Icon(
-                  template.supportState == 'supported'
-                      ? Icons.memory
-                      : Icons.lock_outline,
-                ),
-                title: Text(template.displayName),
-                subtitle: Text(
-                  '${template.architectureSummary} · ${template.bestFor} · ${template.speedLabel}',
-                ),
-                trailing: SrChip(
-                  label: template.supportState,
-                  severity: template.supportState == 'supported'
-                      ? 'success'
-                      : 'warning',
-                ),
-                onTap: () => onSelect(template),
-              ),
-            ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _specChip(SrTokens tokens, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: tokens.panelAlt,
+        borderRadius: BorderRadius.circular(4),
       ),
+      child: Text('$label: $value', style: const TextStyle(fontSize: 11)),
     );
   }
 }
 
-class _TemplateDetail extends StatelessWidget {
-  const _TemplateDetail({
-    required this.template,
-    required this.existingModels,
+// ── Create Panel ──────────────────────────────────────────────────────────────
+
+class _CreatePanel extends StatelessWidget {
+  const _CreatePanel({
     required this.name,
-    required this.scale,
+    required this.featuresCtrl,
+    required this.blocksCtrl,
+    required this.features,
+    required this.blocks,
     required this.busy,
-    required this.onScale,
-    required this.onReset,
+    required this.onFeaturesChanged,
+    required this.onFeaturesTextChanged,
+    required this.onBlocksChanged,
+    required this.onBlocksTextChanged,
     required this.onSave,
-    required this.onDeleteModel,
-    this.error,
+    required this.onReset,
   });
 
-  final ModelTemplate? template;
-  final List<ModelSummary> existingModels;
   final TextEditingController name;
-  final int scale;
+  final TextEditingController featuresCtrl;
+  final TextEditingController blocksCtrl;
+  final int features;
+  final int blocks;
   final bool busy;
-  final ValueChanged<int> onScale;
-  final VoidCallback onReset;
+  final ValueChanged<int> onFeaturesChanged;
+  final ValueChanged<String> onFeaturesTextChanged;
+  final ValueChanged<int> onBlocksChanged;
+  final ValueChanged<String> onBlocksTextChanged;
   final VoidCallback onSave;
-  final ValueChanged<ModelSummary> onDeleteModel;
-  final String? error;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    final value = template;
-    if (value == null) {
-      return const SrEmptyState(
-        title: 'Select a template',
-        message: 'Model templates load from the backend catalog.',
-        icon: Icons.memory,
-      );
-    }
-    final supported = value.supportState == 'supported';
     return ListView(
       children: [
         SrBanner(
-          title: 'Non-destructive switching',
-          message:
-              'Changing the selected template only edits the draft configuration. Existing datasets, runs, checkpoints, and inference records remain intact.',
+          title: 'Scale-agnostic architecture',
+          message: 'I/O layers are auto-configured from dataset scale at training time. Output scale is configurable at inference.',
           severity: 'info',
         ),
         SizedBox(height: tokens.gap),
-        Row(
-          children: [
-            Expanded(
-              child: SrMetricCard(
-                label: 'Parameters',
-                value: value.parameterCount == null
-                    ? 'Unknown'
-                    : _formatCount(value.parameterCount!),
-              ),
-            ),
-            SizedBox(width: tokens.compactGap),
-            Expanded(
-              child: SrMetricCard(label: 'VRAM', value: value.vramEstimate),
-            ),
-            SizedBox(width: tokens.compactGap),
-            Expanded(
-              child: SrMetricCard(label: 'Crop', value: '${value.inputCrop}px'),
-            ),
-            SizedBox(width: tokens.compactGap),
-            Expanded(
-              child: SrMetricCard(
-                label: 'Scale',
-                value: value.supportedScales.map((item) => 'x$item').join(', '),
-              ),
-            ),
-          ],
+        TextField(
+          controller: name,
+          decoration: const InputDecoration(labelText: 'Model name'),
         ),
         SizedBox(height: tokens.gap),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: SrSection(
-                title: value.displayName,
-                subtitle: value.architectureSummary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!supported)
-                      SrBanner(
-                        message:
-                            value.unavailable?.message ??
-                            'This template is visible for planning but cannot be trained by the current backend.',
-                        severity: 'warning',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Features: $features', style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        child: TextField(
+                          controller: featuresCtrl,
+                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
+                          keyboardType: TextInputType.number,
+                          onChanged: busy ? null : onFeaturesTextChanged,
+                        ),
                       ),
-                    SizedBox(height: tokens.compactGap),
-                    TextField(
-                      controller: name,
-                      decoration: const InputDecoration(
-                        labelText: 'Model name',
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Slider(
+                          min: 8, max: 256, divisions: 248,
+                          value: features.toDouble().clamp(8, 256),
+                          label: features.toString(),
+                          onChanged: busy ? null : (v) => onFeaturesChanged(v.round()),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: tokens.compactGap),
-                    DropdownButtonFormField<int>(
-                      initialValue: scale,
-                      decoration: const InputDecoration(labelText: 'Scale'),
-                      items: [
-                        for (final item in value.supportedScales)
-                          DropdownMenuItem(value: item, child: Text('x$item')),
-                      ],
-                      onChanged: busy ? null : (item) => onScale(item ?? scale),
-                    ),
-                    SizedBox(height: tokens.compactGap),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: value.resetAction.supported && !busy
-                              ? onReset
-                              : null,
-                          icon: const Icon(Icons.restart_alt),
-                          label: const Text('Reset to defaults'),
-                        ),
-                        FilledButton.icon(
-                          onPressed:
-                              supported &&
-                                  value.saveAsModelAction.supported &&
-                                  !busy
-                              ? onSave
-                              : null,
-                          icon: const Icon(Icons.save_outlined),
-                          label: const Text('Save as model'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: value.importAction.supported
-                              ? () {}
-                              : null,
-                          icon: const Icon(Icons.file_upload_outlined),
-                          label: const Text('Import template'),
-                        ),
-                      ],
-                    ),
-                    if (busy) ...[
-                      SizedBox(height: tokens.compactGap),
-                      const SrProgressBar(kind: SrProgressKind.indeterminate),
                     ],
-                    if (error != null) ...[
-                      SizedBox(height: tokens.compactGap),
-                      SrBanner(message: error!, severity: 'error'),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             SizedBox(width: tokens.gap),
             Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SrSection(
-                    title: 'Architecture flow',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final step in value.architectureSteps)
-                          ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.arrow_forward),
-                            title: Text(step),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: tokens.gap),
-                  SrSection(
-                    title: 'Hyperparameters',
-                    child: Column(
-                      children: [
-                        for (final entry in value.hyperparameters.entries)
-                          _KeyValue(entry.key, entry.value.toString()),
-                      ],
-                    ),
+                  Text('Blocks: $blocks', style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        child: TextField(
+                          controller: blocksCtrl,
+                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
+                          keyboardType: TextInputType.number,
+                          onChanged: busy ? null : onBlocksTextChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Slider(
+                          min: 1, max: 64, divisions: 63,
+                          value: blocks.toDouble().clamp(1, 64),
+                          label: blocks.toString(),
+                          onChanged: busy ? null : (v) => onBlocksChanged(v.round()),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -463,61 +474,263 @@ class _TemplateDetail extends StatelessWidget {
           ],
         ),
         SizedBox(height: tokens.gap),
-        SrSection(
-          title: 'Project models',
-          child: existingModels.isEmpty
-              ? const Text('No saved models yet.')
-              : Column(
-                  children: [
-                    for (final model in existingModels)
-                      ListTile(
-                        leading: const Icon(Icons.memory),
-                        title: Text(model.name),
-                        subtitle: Text(
-                          '${model.architecture} · x${model.scale} · ${model.numFeatures} features · ${model.numBlocks} blocks',
-                        ),
-                        trailing: Wrap(
-                          spacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(model.status),
-                            IconButton(
-                              onPressed: busy
-                                  ? null
-                                  : () => onDeleteModel(model),
-                              icon: const Icon(Icons.delete_outline),
-                              tooltip: 'Delete model',
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: busy ? null : onReset,
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Reset'),
+            ),
+            FilledButton.icon(
+              onPressed: busy ? null : onSave,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save as model'),
+            ),
+          ],
         ),
+        if (busy) ...[
+          SizedBox(height: tokens.compactGap),
+          const SrProgressBar(kind: SrProgressKind.indeterminate),
+        ],
       ],
     );
   }
 }
 
-class _KeyValue extends StatelessWidget {
-  const _KeyValue(this.label, this.value);
+// ── Manage Panel ──────────────────────────────────────────────────────────────
 
-  final String label;
-  final String value;
+class _ManagePanel extends StatelessWidget {
+  const _ManagePanel({
+    required this.models,
+    required this.runs,
+    required this.busy,
+    required this.editingModelId,
+    required this.editNameCtrl,
+    required this.onStartRename,
+    required this.onCancelRename,
+    required this.onConfirmRename,
+    required this.onDelete,
+    required this.onDuplicate,
+    required this.onTrain,
+    this.onNavigateToTab,
+  });
+
+  final List<ModelSummary> models;
+  final List<RunSummary> runs;
+  final bool busy;
+  final String? editingModelId;
+  final TextEditingController editNameCtrl;
+  final ValueChanged<ModelSummary> onStartRename;
+  final VoidCallback onCancelRename;
+  final ValueChanged<ModelSummary> onConfirmRename;
+  final ValueChanged<ModelSummary> onDelete;
+  final ValueChanged<ModelSummary> onDuplicate;
+  final ValueChanged<ModelSummary> onTrain;
+  final void Function(int)? onNavigateToTab;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: srTokens(context).muted),
+    final tokens = srTokens(context);
+    if (models.isEmpty) {
+      return const Center(child: Text('No models yet. Switch to Create to build one.'));
+    }
+    return ListView(
+      children: [
+        for (final model in models) ...[
+          Builder(builder: (context) {
+            final activeRun = runs.where((r) => r.modelId == model.id && r.isActive).firstOrNull;
+            return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.memory, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: editingModelId == model.id
+                            ? SizedBox(
+                                width: 200,
+                                child: TextField(
+                                  controller: editNameCtrl,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                                  onSubmitted: (_) => onConfirmRename(model),
+                                ),
+                              )
+                            : Text(model.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                      if (activeRun != null) ...[
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                          width: 12, height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        ),
+                        const SizedBox(width: 4),
+                        Text('Training…', style: TextStyle(color: tokens.muted, fontSize: 12)),
+                      ],
+                      const SizedBox(width: 8),
+                      SrChip(
+                        label: model.status,
+                        kind: model.status == 'trained' ? SrChipKind.ok : SrChipKind.default_,
+                        size: SrChipSize.sm,
+                      ),
+                      if (model.trainHistory != null && model.trainHistory!.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        SrChip(
+                          label: '${model.trainHistory!.length} session${model.trainHistory!.length == 1 ? '' : 's'}',
+                          kind: SrChipKind.accent,
+                          size: SrChipSize.sm,
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${model.numFeatures} features · ${model.numBlocks} blocks · scale-agnostic',
+                    style: TextStyle(color: tokens.muted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: busy ? null : () => onTrain(model),
+                        icon: const Icon(Icons.play_arrow, size: 16),
+                        label: const Text('Train'),
+                      ),
+                      if (model.status == 'trained')
+                        OutlinedButton.icon(
+                          onPressed: busy ? null : () => onDuplicate(model),
+                          icon: const Icon(Icons.copy, size: 16),
+                          label: const Text('Duplicate'),
+                        ),
+                      if (editingModelId == model.id)
+                        OutlinedButton.icon(
+                          onPressed: busy ? null : onCancelRename,
+                          icon: const Icon(Icons.close, size: 16),
+                          label: const Text('Cancel'),
+                        )
+                      else
+                        OutlinedButton.icon(
+                          onPressed: busy ? null : () => onStartRename(model),
+                          icon: const Icon(Icons.edit, size: 16),
+                          label: const Text('Rename'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : () => onDelete(model),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Delete'),
+                        style: OutlinedButton.styleFrom(foregroundColor: tokens.danger),
+                      ),
+                    ],
+                  ),
+                  if (model.trainHistory != null && model.trainHistory!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ...model.trainHistory!.map((session) => _SessionTile(
+                      session: session,
+                      modelId: model.id,
+                      trainedCoreWeightsPath: model.trainedCoreWeightsPath,
+                      onNavigateToTab: onNavigateToTab,
+                    )),
+                  ],
+                ],
+              ),
             ),
+          );
+          }),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Session Tile ──────────────────────────────────────────────────────────────
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({
+    required this.session,
+    required this.modelId,
+    required this.trainedCoreWeightsPath,
+    this.onNavigateToTab,
+  });
+
+  final TrainHistoryEntry session;
+  final String modelId;
+  final String? trainedCoreWeightsPath;
+  final void Function(int)? onNavigateToTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final bestPsnr = session.bestMetrics['val_psnr'];
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: tokens.panelAlt,
+        borderRadius: BorderRadius.circular(tokens.radius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 14, color: tokens.muted),
+              const SizedBox(width: 6),
+              Text(session.datasetName, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+              const SizedBox(width: 8),
+              Text('x${session.scale}', style: TextStyle(color: tokens.muted, fontSize: 12)),
+              const Spacer(),
+              if (bestPsnr != null)
+                Text('PSNR: ${bestPsnr.toStringAsFixed(2)} dB', style: TextStyle(color: tokens.accent, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
           ),
-          Text(value),
+          const SizedBox(height: 4),
+          Text('${session.epochs} epochs · ${session.checkpoints.length} checkpoints', style: TextStyle(color: tokens.muted, fontSize: 11)),
+          if (session.checkpoints.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            () {
+              final best = session.checkpoints
+                  .where((c) => c.id == session.bestCheckpointId)
+                  .firstOrNull ?? session.checkpoints.last;
+              return InkWell(
+                onTap: onNavigateToTab != null ? () => onNavigateToTab!(5) : null,
+                borderRadius: BorderRadius.circular(4),
+                child: Tooltip(
+                  message: onNavigateToTab != null ? 'View all ${session.checkpoints.length} checkpoints' : '',
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_awesome, size: 14, color: tokens.warning),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          best.path.split('/').last,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.accent,
+                          ),
+                        ),
+                      ),
+                      SrChip(label: '★ Best', kind: SrChipKind.ok, size: SrChipSize.sm),
+                      const SizedBox(width: 6),
+                      Text(
+                        '+${session.checkpoints.length - 1} more',
+                        style: TextStyle(color: tokens.muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }(),
+          ],
         ],
       ),
     );
@@ -525,11 +738,7 @@ class _KeyValue extends StatelessWidget {
 }
 
 String _formatCount(int value) {
-  if (value >= 1000000) {
-    return '${(value / 1000000).toStringAsFixed(1)}M';
-  }
-  if (value >= 1000) {
-    return '${(value / 1000).toStringAsFixed(1)}K';
-  }
+  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
   return value.toString();
 }

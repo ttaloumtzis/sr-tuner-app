@@ -301,6 +301,11 @@ def forget_recent_project(path: str) -> RecentProjectsResponse:
     return list_recent_projects()
 
 
+def forget_all_recent_projects() -> RecentProjectsResponse:
+    _write_recent_records([])
+    return list_recent_projects()
+
+
 def workspace_preferences(project_root: Path) -> WorkspacePreferencesResponse:
     workspace = open_project(project_root).workspace
     return WorkspacePreferencesResponse(**workspace.model_dump())
@@ -505,12 +510,12 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
     return ModelTemplateCatalogResponse(templates=[internal], filters={"support": ["supported"], "scale": ["2", "3", "4", "8"]})
 
 
-def save_template_as_model(project_root: Path, template_id: str, name: str, scale: int) -> ProjectState:
+def save_template_as_model(project_root: Path, template_id: str, name: str, num_features: int = 32, num_blocks: int = 4) -> ProjectState:
     if template_id != "internal-residual-pixelshuffle":
         raise ApiError(409, "template_unsupported", "This model template is not supported by the backend yet.", details={"template_id": template_id})
     from .models import create_model
 
-    project, _model = create_model(project_root, CreateModelRequest(name=name, scale=scale))
+    project, _model = create_model(project_root, CreateModelRequest(name=name, num_features=num_features, num_blocks=num_blocks))
     return project
 
 
@@ -549,7 +554,7 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
         validation_epochs=validation_epochs,
         total_train_iterations=total_train_iterations,
         total_validation_iterations=total_validation_iterations,
-        vram_peak_bytes=_estimate_vram_peak_bytes(model, request),
+        vram_peak_bytes=_estimate_vram_peak_bytes(model, request) if request.device.startswith(("cuda", "rocm")) else None,
         ram_peak_bytes=_estimate_ram_peak_bytes(model, request),
         disk_per_checkpoint_bytes=25_000_000,
         low_pair_guard=low_pair,
@@ -565,17 +570,14 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
 
 def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:
     crop = 64
-    scale = max(model.scale, 1)
+    model_scale = model.scale or 4
+    scale = max(model_scale, 1)
     features = max(model.num_features, 1)
     blocks = max(model.num_blocks, 1)
     batch = max(request.batch_size, 1)
     bytes_per_value = 2 if request.precision == "mixed" else 4
     lr_pixels = crop * crop
     hr_pixels = (crop * scale) * (crop * scale)
-    # Autograd keeps several tensors per residual block, optimizer state, CUDA
-    # workspace/cache, and stacked LR/HR/prediction batches. This is calibrated
-    # toward observed local desktop runs rather than the tiny theoretical tensor
-    # minimum, which under-reports PyTorch GPU memory by multiple GB.
     activation_layers = blocks * 18 + 20
     residual_activation_values = batch * features * lr_pixels * activation_layers
     image_activation_values = batch * 18 * hr_pixels
@@ -586,12 +588,10 @@ def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> i
         + parameter_values * bytes_per_value * optimizer_multiplier
     )
     if request.device.startswith(("cuda", "rocm")):
-        scale_factor = max(1.0, scale / 4)
-        feature_factor = max(1.0, features / 32)
-        block_factor = max(1.0, blocks / 4)
-        cuda_floor = int((5.8 + 0.075 * batch * scale_factor * feature_factor * block_factor) * 1024**3)
-        return max(int(tensor_bytes * 2.2), cuda_floor)
-    return int(tensor_bytes * 1.25)
+        multiplier = 2.2
+    else:
+        multiplier = 1.25
+    return int(tensor_bytes * multiplier)
 
 
 def _estimate_ram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:

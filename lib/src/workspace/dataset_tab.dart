@@ -1318,10 +1318,13 @@ class _PipelineCard extends StatelessWidget {
     final resynthesis = detail.resynthesis;
     return SrSection(
       title: 'Degradation pipeline',
-      trailing: OutlinedButton.icon(
-        onPressed: resynthesis?.supported == true ? () {} : null,
-        icon: const Icon(Icons.auto_fix_high),
-        label: const Text('Re-synthesize'),
+      trailing: Tooltip(
+        message: 'Coming soon — re-synthesis will be available in a future update.',
+        child: OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.auto_fix_high),
+          label: const Text('Re-synthesize'),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

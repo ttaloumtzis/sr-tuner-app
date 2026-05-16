@@ -14,12 +14,16 @@ class TrainingTab extends StatefulWidget {
     required this.client,
     required this.project,
     required this.onProjectChanged,
+    this.initialFineTuneCheckpointId,
+    this.initialFineTuneCoreWeightsPath,
     super.key,
   });
 
   final BackendClient client;
   final ProjectState project;
   final ValueChanged<ProjectState> onProjectChanged;
+  final String? initialFineTuneCheckpointId;
+  final String? initialFineTuneCoreWeightsPath;
 
   @override
   State<TrainingTab> createState() => _TrainingTabState();
@@ -36,6 +40,10 @@ class _TrainingTabState extends State<TrainingTab> {
   final _l1Weight = TextEditingController(text: '1.0');
   final _perceptualWeight = TextEditingController(text: '0.0');
   final _adversarialWeight = TextEditingController(text: '0.0');
+  final _learningRate = TextEditingController(text: '0.0002');
+  String? _fineTuneSourceCheckpointId;
+  String? _fineTuneSourceCoreWeightsPath;
+  String? _fineTuneSourceLabel;
   TrainingReadiness? _readiness;
   TrainingEstimate? _estimate;
   List<DeviceOption> _devices = [
@@ -44,7 +52,7 @@ class _TrainingTabState extends State<TrainingTab> {
   String? _datasetId;
   String? _modelId;
   String _device = 'cpu';
-  final String _trainMode = 'new';
+  String get _trainMode => _fineTuneSourceCheckpointId != null ? 'fine_tune' : 'new';
   String _precision = 'float32';
   String _scheduler = 'cosine';
   String _diffMode = 'absolute';
@@ -56,6 +64,7 @@ class _TrainingTabState extends State<TrainingTab> {
   bool _deviceTouched = false;
   bool _busy = false;
   String? _error;
+  String? _estimateError;
 
   @override
   void initState() {
@@ -75,6 +84,7 @@ class _TrainingTabState extends State<TrainingTab> {
     ]) {
       controller.addListener(_loadEstimate);
     }
+    _resolveFineTuneHandoff();
     _loadReadiness();
     _loadEstimate();
   }
@@ -85,6 +95,52 @@ class _TrainingTabState extends State<TrainingTab> {
     if (oldWidget.project != widget.project) {
       _selectDefaults();
       _loadEstimate();
+      _checkForFailedRuns(oldWidget.project.runs, widget.project.runs);
+    }
+    if (widget.initialFineTuneCheckpointId != oldWidget.initialFineTuneCheckpointId &&
+        widget.initialFineTuneCheckpointId != null) {
+      _fineTuneSourceCheckpointId = null;
+      _fineTuneSourceCoreWeightsPath = null;
+      _fineTuneSourceLabel = null;
+      _resolveFineTuneHandoff();
+      _loadEstimate();
+    }
+  }
+
+  void _checkForFailedRuns(List<RunSummary> oldRuns, List<RunSummary> newRuns) {
+    for (final newRun in newRuns) {
+      if (newRun.state != 'failed') continue;
+      final oldRun = oldRuns.where((r) => r.id == newRun.id).firstOrNull;
+      if (oldRun == null || oldRun.state == newRun.state) continue;
+      final err = newRun.error;
+      String msg = "Run '${newRun.name}' failed.";
+      if (err != null) {
+        final code = err['code'] as String?;
+        final message = err['message'] as String?;
+        if (code == 'training_failed' && message != null) {
+          msg += ' $message';
+        } else if (message != null) {
+          msg += ' $message';
+        }
+      }
+      if (mounted) {
+        try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
+        } catch (_) {
+          // context may be stale during route transitions
+        }
+      }
     }
   }
 
@@ -100,6 +156,7 @@ class _TrainingTabState extends State<TrainingTab> {
     _l1Weight.dispose();
     _perceptualWeight.dispose();
     _adversarialWeight.dispose();
+    _learningRate.dispose();
     super.dispose();
   }
 
@@ -109,6 +166,30 @@ class _TrainingTabState extends State<TrainingTab> {
         .firstOrNull
         ?.id;
     _modelId ??= widget.project.models.firstOrNull?.id;
+  }
+
+  void _resolveFineTuneHandoff() {
+    final checkpointId = widget.initialFineTuneCheckpointId;
+    final coreWeightsPath = widget.initialFineTuneCoreWeightsPath;
+    if (checkpointId == null) return;
+    _fineTuneSourceCheckpointId = checkpointId;
+    _fineTuneSourceCoreWeightsPath = coreWeightsPath;
+    outer:
+    for (final model in widget.project.models) {
+      for (final entry in model.trainHistory ?? const <TrainHistoryEntry>[]) {
+        for (final ckpt in entry.checkpoints) {
+          if (ckpt.id == checkpointId) {
+            _modelId = model.id;
+            break outer;
+          }
+        }
+      }
+    }
+    if (_fineTuneSourceCoreWeightsPath == null && _modelId != null) {
+      _fineTuneSourceCoreWeightsPath =
+          'models/$_modelId/core_weights/${checkpointId}_core.pth';
+    }
+    _fineTuneSourceLabel = 'checkpoint $checkpointId';
   }
 
   Future<void> _loadReadiness() async {
@@ -181,10 +262,15 @@ class _TrainingTabState extends State<TrainingTab> {
             double.tryParse(_adversarialWeight.text.trim()) ?? 0.0,
       );
       if (mounted) {
-        setState(() => _estimate = estimate);
+        setState(() {
+          _estimate = estimate;
+          _estimateError = null;
+        });
       }
-    } catch (_) {
-      // Estimate is advisory and should not block run setup rendering.
+    } catch (e) {
+      if (mounted) {
+        setState(() => _estimateError = 'Could not load estimate');
+      }
     }
   }
 
@@ -242,10 +328,17 @@ class _TrainingTabState extends State<TrainingTab> {
         perceptualWeight: double.tryParse(_perceptualWeight.text.trim()) ?? 0.0,
         adversarialWeight:
             double.tryParse(_adversarialWeight.text.trim()) ?? 0.0,
+        learningRate: double.tryParse(_learningRate.text.trim()),
+        sourceCoreWeightsPath: _fineTuneSourceCoreWeightsPath,
       );
       widget.onProjectChanged(envelope.project);
+      _fineTuneSourceCheckpointId = null;
+      _fineTuneSourceCoreWeightsPath = null;
+      _fineTuneSourceLabel = null;
     } catch (error) {
-      setState(() => _error = error.toString());
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -332,11 +425,39 @@ class _TrainingTabState extends State<TrainingTab> {
       final envelope = await action();
       widget.onProjectChanged(envelope.project);
     } catch (error) {
-      setState(() => _error = error.toString());
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
+    }
+  }
+
+  void _resumeRun(RunSummary run) {
+    _runAction(
+      () => widget.client.resumeRun(
+        projectId: widget.project.id,
+        runId: run.id,
+      ),
+    );
+  }
+
+  void _cloneRun(RunSummary run) {
+    setState(() {
+      _datasetId = run.datasetId;
+      _modelId = run.modelId;
+      _device = run.device;
+      _epochs.text = run.epochs.toString();
+      _batchSize.text = run.batchSize.toString();
+      _checkpointCadence.text = run.checkpointCadence.toString();
+    });
+    Future.microtask(_loadEstimate);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Settings copied from "${run.name}".')),
+      );
     }
   }
 
@@ -443,12 +564,19 @@ class _TrainingTabState extends State<TrainingTab> {
                   flex: 3,
                   child: ListView(
                     children: [
+                      if (_fineTuneSourceLabel != null)
+                        SrBanner(
+                          title: 'Fine-tuning from',
+                          message: _fineTuneSourceLabel!,
+                          severity: 'info',
+                        ),
                       _OptimizerSection(
                         devices: _devices,
                         device: _device,
                         precision: _precision,
                         scheduler: _scheduler,
                         warmup: _warmup,
+                        learningRate: _learningRate,
                         tensorboard: _tensorboard,
                         compile: _compile,
                         busy: _busy,
@@ -498,6 +626,7 @@ class _TrainingTabState extends State<TrainingTab> {
                     children: [
                       _EstimateSection(
                         estimate: _estimate,
+                        estimateError: _estimateError,
                         readiness: readiness,
                         device: _device,
                         canCreate: canCreate,
@@ -515,6 +644,8 @@ class _TrainingTabState extends State<TrainingTab> {
                         onPause: _pause,
                         onStop: _stop,
                         onDelete: _deleteRun,
+                        onResume: _resumeRun,
+                        onClone: _cloneRun,
                       ),
                     ],
                   ),
@@ -536,7 +667,7 @@ class _TrainingTabState extends State<TrainingTab> {
     if (dataset == null || model == null) {
       return false;
     }
-    return dataset.scale == model.scale;
+    return true;
   }
 }
 
@@ -595,16 +726,22 @@ class _BasicsSection extends StatelessWidget {
               for (final model in models)
                 DropdownMenuItem(
                   value: model.id,
-                  child: Text('${model.name} · x${model.scale}'),
+                  child: Text('${model.name} · ${model.trainedCoreWeightsPath != null ? "trained" : "untrained"}'),
                 ),
             ],
             onChanged: busy ? null : onModel,
           ),
-          if (!compatible) ...[
+          if (selectedDataset != null) ...[
             const SizedBox(height: 8),
-            SrBanner(
-              message: 'Selected dataset and model scales do not match.',
-              severity: 'error',
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: srTokens(context).muted),
+                const SizedBox(width: 6),
+                Text(
+                  'Scale: inherited from dataset',
+                  style: TextStyle(color: srTokens(context).muted),
+                ),
+              ],
             ),
           ],
         ],
@@ -726,6 +863,7 @@ class _OptimizerSection extends StatelessWidget {
     required this.precision,
     required this.scheduler,
     required this.warmup,
+    required this.learningRate,
     required this.tensorboard,
     required this.compile,
     required this.busy,
@@ -741,6 +879,7 @@ class _OptimizerSection extends StatelessWidget {
   final String precision;
   final String scheduler;
   final TextEditingController warmup;
+  final TextEditingController learningRate;
   final bool tensorboard;
   final bool compile;
   final bool busy;
@@ -809,6 +948,9 @@ class _OptimizerSection extends StatelessWidget {
               Expanded(child: _numberField(warmup, 'Warmup')),
             ],
           ),
+          const SizedBox(height: 12),
+          _numberField(learningRate, 'Learning rate'),
+          const SizedBox(height: 12),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('TensorBoard logging'),
@@ -893,6 +1035,7 @@ class _EstimateSection extends StatelessWidget {
     required this.canCreate,
     required this.busy,
     required this.onCreate,
+    this.estimateError,
   });
 
   final TrainingEstimate? estimate;
@@ -901,15 +1044,24 @@ class _EstimateSection extends StatelessWidget {
   final bool canCreate;
   final bool busy;
   final VoidCallback onCreate;
+  final String? estimateError;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = srTokens(context);
     final value = estimate;
     return SrSection(
       title: 'Setup estimate and launch readiness',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (estimateError != null) ...[
+            Text(
+              estimateError!,
+              style: TextStyle(color: tokens.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1117,6 +1269,8 @@ class _RunList extends StatelessWidget {
     required this.onPause,
     required this.onStop,
     required this.onDelete,
+    required this.onResume,
+    required this.onClone,
   });
 
   final List<RunSummary> runs;
@@ -1128,6 +1282,8 @@ class _RunList extends StatelessWidget {
   final ValueChanged<String> onPause;
   final ValueChanged<RunSummary> onStop;
   final ValueChanged<RunSummary> onDelete;
+  final ValueChanged<RunSummary> onResume;
+  final ValueChanged<RunSummary> onClone;
 
   @override
   Widget build(BuildContext context) {
@@ -1219,12 +1375,14 @@ class _RunList extends StatelessWidget {
                           ),
                         ),
                         OutlinedButton.icon(
-                          onPressed: null,
+                          onPressed: busy ? null : () => onClone(run),
                           icon: const Icon(Icons.copy),
                           label: const Text('Clone settings'),
                         ),
                         OutlinedButton.icon(
-                          onPressed: run.state == 'completed' ? () {} : null,
+                          onPressed: busy || run.state != 'completed'
+                              ? null
+                              : () => onResume(run),
                           icon: const Icon(Icons.replay),
                           label: const Text('Resume training'),
                         ),

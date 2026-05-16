@@ -16,6 +16,7 @@ from sr_tuner_api.inference import (
     _is_oom,
     _oom_message,
 )
+from sr_tuner_api.jobs import job_store
 from sr_tuner_api.main import app
 from sr_tuner_api.project_store import open_project, write_project
 
@@ -120,7 +121,7 @@ def _make_run(project_root: Path, project_id: str, monkeypatch) -> str:
 
     model_resp = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "m", "scale": 4, "num_features": 8, "num_blocks": 2},
+        json={"name": "m", "num_features": 8, "num_blocks": 2},
         headers=auth_headers(),
     )
     assert model_resp.status_code == 200
@@ -205,7 +206,7 @@ def test_inference_checkpoint_scale_derived(tmp_path, monkeypatch):
         device="cpu",
     )
     try:
-        record, _ = run_inference(project_root, req)
+        record, _ = run_inference(project_root, req, job_store)
         assert record.scale == 4
     except Exception:
         pytest.skip("PyTorch not available in this environment.")
@@ -231,7 +232,7 @@ def test_single_image_inference_produces_record(tmp_path, monkeypatch):
         mode="single",
     )
     try:
-        record, job = run_inference(project_root, req)
+        record, job = run_inference(project_root, req, job_store)
     except Exception:
         pytest.skip("PyTorch not available.")
 
@@ -261,7 +262,7 @@ def test_single_inference_persists_to_history(tmp_path, monkeypatch):
         device="cpu",
     )
     try:
-        run_inference(project_root, req)
+        run_inference(project_root, req, job_store)
     except Exception:
         pytest.skip("PyTorch not available.")
 
@@ -290,7 +291,7 @@ def test_single_inference_missing_input_raises(tmp_path, monkeypatch):
         device="cpu",
     )
     with pytest.raises(ApiError) as exc_info:
-        run_inference(project_root, req)
+        run_inference(project_root, req, job_store)
     assert exc_info.value.detail["code"] == "input_not_found"
 
 
@@ -316,7 +317,7 @@ def test_batch_inference_partial_results(tmp_path, monkeypatch):
         mode="batch",
     )
     try:
-        record, job = run_inference(project_root, req)
+        record, job = run_inference(project_root, req, job_store)
     except Exception:
         pytest.skip("PyTorch not available.")
 
@@ -356,7 +357,7 @@ def test_batch_inference_no_images_raises(tmp_path, monkeypatch):
         mode="batch",
     )
     with pytest.raises(ApiError) as exc_info:
-        run_inference(project_root, req)
+        run_inference(project_root, req, job_store)
     assert exc_info.value.detail["code"] == "no_images_found"
 
 
@@ -380,7 +381,7 @@ def test_tile_config_stored_in_record(tmp_path, monkeypatch):
         tile_config=tile,
     )
     try:
-        record, _ = run_inference(project_root, req)
+        record, _ = run_inference(project_root, req, job_store)
     except Exception:
         pytest.skip("PyTorch not available.")
 
@@ -428,7 +429,7 @@ def test_inference_history_contains_metadata(tmp_path, monkeypatch):
         device="cpu",
     )
     try:
-        run_inference(project_root, req)
+        run_inference(project_root, req, job_store)
     except Exception:
         pytest.skip("PyTorch not available.")
 

@@ -120,7 +120,7 @@ def _make_run(project_root: Path, project_id: str, monkeypatch) -> str:
 
     model_resp = client.post(
         f"/projects/{project_id}/models",
-        json={"name": "m", "scale": 4, "num_features": 32, "num_blocks": 4},
+        json={"name": "m", "num_features": 32, "num_blocks": 4},
         headers=auth_headers(),
     )
     assert model_resp.status_code == 200
@@ -442,7 +442,111 @@ def test_export_onnx_fails_when_onnx_unavailable(tmp_path: Path, monkeypatch) ->
     assert resp.json()["error"]["code"] == "onnx_unavailable"
 
 
-# ── export .pth ────────────────────────────────────────────────────────────────
+# ── core weight extraction ──────────────────────────────────────────────────────
+
+def test_extract_core_weights_extracts_only_body_keys(tmp_path: Path) -> None:
+    """extract_core_weights returns only the body.* keys from a checkpoint payload."""
+    ckpt = tmp_path / "ckpt.pth"
+    full_state = {
+        "head.weight": "head_weight",
+        "head.bias": "head_bias",
+        "body.0.body.0.weight": "b0_w",
+        "body.0.body.0.bias": "b0_b",
+        "body.0.body.2.weight": "b0_w2",
+        "body.0.body.2.bias": "b0_b2",
+        "body.1.body.0.weight": "b1_w",
+        "tail.0.weight": "tail_w",
+        "tail.0.bias": "tail_b",
+    }
+    payload = {
+        "schema_version": 1,
+        "epoch": 1,
+        "iteration": 100,
+        "model_config": {"num_features": 32, "num_blocks": 2},
+        "dataset_id": "ds_1",
+        "scale": 4,
+        "model_state_dict": full_state,
+    }
+    ckpt.write_bytes(json.dumps(payload).encode())
+
+    from sr_tuner_api.checkpoints import extract_core_weights
+    core = extract_core_weights(ckpt)
+    for key in core:
+        assert key.startswith("body."), f"Unexpected key: {key}"
+    assert "body.0.body.0.weight" in core
+    assert "body.0.body.0.bias" in core
+    assert "body.0.body.2.weight" in core
+    assert "body.1.body.0.weight" in core
+    assert "head.weight" not in core
+    assert "head.bias" not in core
+    assert "tail.0.weight" not in core
+    assert "tail.0.bias" not in core
+    assert len(core) == 5
+
+
+def test_extract_core_weights_raises_when_no_state(tmp_path: Path) -> None:
+    """extract_core_weights raises ApiError when checkpoint has no model_state_dict."""
+    ckpt = tmp_path / "ckpt_no_state.pth"
+    payload = {"schema_version": 1, "epoch": 1, "iteration": 100, "model_config": {}, "dataset_id": "ds_1", "scale": 4}
+    ckpt.write_bytes(json.dumps(payload).encode())
+
+    from sr_tuner_api.checkpoints import extract_core_weights
+    from sr_tuner_api.errors import ApiError
+    with pytest.raises(ApiError) as exc_info:
+        extract_core_weights(ckpt)
+    assert exc_info.value.detail["code"] == "checkpoint_no_state"
+
+
+def test_extract_core_weights_raises_when_no_body_keys(tmp_path: Path) -> None:
+    """extract_core_weights raises ApiError when state_dict has no body.* keys."""
+    ckpt = tmp_path / "ckpt_no_body.pth"
+    payload = {
+        "schema_version": 1,
+        "epoch": 1,
+        "iteration": 100,
+        "model_config": {"num_features": 32, "num_blocks": 2},
+        "dataset_id": "ds_1",
+        "scale": 4,
+        "model_state_dict": {"head.weight": "hw", "tail.0.weight": "tw"},
+    }
+    ckpt.write_bytes(json.dumps(payload).encode())
+
+    from sr_tuner_api.checkpoints import extract_core_weights
+    from sr_tuner_api.errors import ApiError
+    with pytest.raises(ApiError) as exc_info:
+        extract_core_weights(ckpt)
+    assert exc_info.value.detail["code"] == "core_weights_empty"
+
+
+def test_extract_and_save_core_weights_creates_files(tmp_path: Path) -> None:
+    """extract_and_save_core_weights creates best_core.pth and best_core.json."""
+    ckpt = tmp_path / "ckpt.pth"
+    full_state = {
+        "head.weight": "hw",
+        "body.0.body.0.weight": "b0w",
+        "body.0.body.0.bias": "b0b",
+        "tail.0.weight": "tw",
+    }
+    payload = {
+        "schema_version": 1,
+        "epoch": 1,
+        "iteration": 100,
+        "model_config": {"num_features": 32, "num_blocks": 1},
+        "dataset_id": "ds_1",
+        "scale": 4,
+        "model_state_dict": full_state,
+    }
+    ckpt.write_bytes(json.dumps(payload).encode())
+
+    from sr_tuner_api.checkpoints import extract_and_save_core_weights
+    stored = extract_and_save_core_weights(ckpt, tmp_path, "model_001", "run_001")
+    core_dir = tmp_path / "models" / "model_001" / "core_weights"
+    assert (core_dir / "run_001_core.pth").exists()
+    assert (core_dir / "run_001_core.json").exists()
+    meta = json.loads((core_dir / "run_001_core.json").read_text())
+    assert meta["model_id"] == "model_001"
+    assert meta["run_id"] == "run_001"
+    assert stored is not None and len(stored) > 0
 
 def test_export_pth_copies_file(tmp_path: Path, monkeypatch) -> None:
     project_id, project_root = _make_project(tmp_path, monkeypatch)

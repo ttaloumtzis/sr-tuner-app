@@ -15,9 +15,11 @@ from .ids import new_id
 from .jobs import Job, JobError, utc_now_iso
 from . import logging_schema as log_schema
 from .project_store import open_project, store_asset_path, write_project
-from .runs import DependencyItem, available_devices
+from .runs import DependencyItem, available_devices, build_internal_sr_model
 
 _log = create_component_logger(log_schema.COMPONENT_INFERENCE)
+
+_model_cache: dict[tuple[str, int], Any] = {}
 
 
 PaddingMode = Literal["reflect", "replicate", "constant"]
@@ -34,8 +36,10 @@ class TileConfig(BaseModel):
 
 
 class InferenceRequest(BaseModel):
-    checkpoint_id: str
-    run_id: str
+    checkpoint_id: str | None = None
+    run_id: str | None = None
+    model_id: str | None = None
+    output_scale: int | None = None
     input_path: str
     output_dir: str | None = None
     output_format: Literal["png", "jpg"] = "png"
@@ -59,10 +63,13 @@ class PerFileResult(BaseModel):
 
 class InferenceRecord(BaseModel):
     id: str = Field(default_factory=lambda: new_id("inf"))
-    checkpoint_id: str
-    run_id: str
-    checkpoint_path: str
-    scale: int
+    job_id: str = ""
+    checkpoint_id: str | None = None
+    run_id: str | None = None
+    model_id: str | None = None
+    model_name: str | None = None
+    checkpoint_path: str = ""
+    scale: int = 0
     mode: InferenceMode
     input_path: str
     output_path: str | None = None
@@ -113,7 +120,7 @@ def inference_readiness(device: str = "cpu") -> InferenceReadinessResponse:
     )
 
 
-def run_inference(project_root: Path, request: InferenceRequest) -> tuple[InferenceRecord, Job]:
+def run_inference(project_root: Path, request: InferenceRequest, job_store) -> tuple[InferenceRecord, Job]:
     readiness = inference_readiness(request.device)
     if not readiness.available:
         _log.error(
@@ -129,21 +136,45 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
         )
 
     project = open_project(project_root)
-    checkpoint = _resolve_checkpoint(project, request.run_id, request.checkpoint_id)
-    payload = validate_checkpoint_payload(project_root, checkpoint.path)
-    scale = payload.get("scale", checkpoint.scale)
+    model_based = request.model_id is not None
+    checkpoint_based = request.checkpoint_id is not None
+    if model_based == checkpoint_based:
+        raise ApiError(422, "inference_source_required", "Exactly one of model_id or checkpoint_id must be provided.")
+
+    checkpoint = None
+    scale = request.output_scale or 0
+    record_model_id: str | None = None
+    record_model_name: str | None = None
+
+    if checkpoint_based:
+        checkpoint = _resolve_checkpoint(project, request.run_id, request.checkpoint_id)
+        payload = validate_checkpoint_payload(project_root, checkpoint.path)
+        scale = payload.get("scale", checkpoint.scale)
+    else:
+        model_raw = next((m for m in project.models if m.get("id") == request.model_id), None)
+        if model_raw is None:
+            raise ApiError(404, "model_not_found", "Model was not found.", details={"model_id": request.model_id})
+        if not model_raw.get("trained_core_weights_path"):
+            raise ApiError(422, "model_not_trained", "Model has no trained core weights. Train the model first.")
+        if request.output_scale is None:
+            raise ApiError(422, "output_scale_required", "Output scale is required for model-based inference.")
+        scale = request.output_scale
+        record_model_id = model_raw["id"]
+        record_model_name = model_raw["name"]
 
     output_dir = _resolve_output_dir(project_root, project, request)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    obj_id = request.checkpoint_id or request.model_id or ""
     job = Job(
         type="inference",
         project_id=project.id,
-        object_id=request.checkpoint_id,
+        object_id=obj_id,
         status="running",
         started_at=utc_now_iso(),
         logs=["Inference started."],
     )
+    job = job_store.put(job)
 
     _log.info(
         log_schema.EventNames.INFERENCE_SUBMIT,
@@ -160,7 +191,7 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
         if not input_path.exists():
             raise ApiError(422, "input_not_found", "Input image was not found.", details={"path": str(input_path)})
         try:
-            out = _infer_single(input_path, output_dir, payload, scale, request)
+            out = _infer_single(input_path, output_dir, project_root, scale, request, job=job, job_store=job_store)
             final_output_path = str(out)
             per_file_results.append(PerFileResult(filename=input_path.name, status="success", output_path=str(out)))
             job.logs.append(f"Processed {input_path.name}.")
@@ -176,30 +207,49 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
         if not image_files:
             raise ApiError(422, "no_images_found", "No supported images found in input folder.")
         job.logs.append(f"Found {len(image_files)} images.")
-        for img_path in image_files:
+        for i, img_path in enumerate(image_files):
+            current = job_store.get(job.id)
+            if current.cancel_requested:
+                job.logs.append("Cancellation requested — stopping.")
+                _log.warn(
+                    log_schema.EventNames.JOB_CANCELING,
+                    f"Inference job {job.id} cancelled by user.",
+                    context={"mode": request.mode, "processed": i, "total": len(image_files)},
+                )
+                job.status = "canceled"
+                job.finished_at = utc_now_iso()
+                job_store.put(job)
+                break
             try:
-                out = _infer_single(img_path, output_dir, payload, scale, request)
+                out = _infer_single(img_path, output_dir, project_root, scale, request)
                 per_file_results.append(PerFileResult(filename=img_path.name, status="success", output_path=str(out)))
+                job.logs.append(f"Processed {img_path.name}.")
             except Exception as exc:
                 err_msg = str(exc)
                 if _is_oom(exc):
                     err_msg = _oom_message()
                 per_file_results.append(PerFileResult(filename=img_path.name, status="failed", error=err_msg))
+            job.progress = (i + 1) / len(image_files)
+            job_store.put(job)
 
     elapsed = time.monotonic() - start
 
     successes = [r for r in per_file_results if r.status == "success"]
     failures = [r for r in per_file_results if r.status == "failed"]
-    if not successes:
-        record_status: Literal["completed", "partial", "failed"] = "failed"
+
+    if job.status == "canceled":
+        record_status: Literal["completed", "partial", "failed"] = "failed" if not successes else "partial"
+    elif not successes:
+        record_status = "failed"
     elif failures:
         record_status = "partial"
     else:
         record_status = "completed"
 
-    job.status = "completed" if record_status != "failed" else "failed"
-    if record_status == "failed":
-        job.error = JobError(code="inference_failed", message="All images failed to process.", recoverable=True)
+    if job.status != "canceled":
+        job.status = "completed" if record_status != "failed" else "failed"
+        if record_status == "failed":
+            job.error = JobError(code="inference_failed", message="All images failed to process.", recoverable=True)
     job.progress = len(successes) / max(len(per_file_results), 1)
     job.finished_at = utc_now_iso()
     job.logs.append(f"Finished in {elapsed:.1f}s. {len(successes)}/{len(per_file_results)} succeeded.")
@@ -242,9 +292,12 @@ def run_inference(project_root: Path, request: InferenceRequest) -> tuple[Infere
 
     stored_output_dir = store_asset_path(project_root, output_dir).stored
     record = InferenceRecord(
+        job_id=job.id,
         checkpoint_id=request.checkpoint_id,
         run_id=request.run_id,
-        checkpoint_path=checkpoint.path,
+        model_id=record_model_id,
+        model_name=record_model_name,
+        checkpoint_path=checkpoint.path if checkpoint else "",
         scale=scale,
         mode=request.mode,
         input_path=request.input_path,
@@ -275,24 +328,59 @@ def list_inference_history(project_root: Path) -> InferenceHistoryResponse:
 def _infer_single(
     img_path: Path,
     output_dir: Path,
-    payload: dict[str, Any],
+    project_root: Path,
     scale: int,
     request: InferenceRequest,
+    job: Job | None = None,
+    job_store=None,
 ) -> Path:
     import torch
     from PIL import Image
 
     from .runs import build_internal_sr_model
 
-    model_config = payload.get("model_config", {})
-    num_features = model_config.get("num_features", 32)
-    num_blocks = model_config.get("num_blocks", 4)
+    def _update_progress(p: float) -> None:
+        if job is not None and job_store is not None:
+            job.progress = p
+            job_store.put(job)
 
-    model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
-    state = payload.get("model_state_dict")
-    if state is not None:
-        model.load_state_dict(state)
-    model.eval()
+    model_based = request.model_id is not None
+    model = None
+    cache_key: tuple[str, int] | None = None
+
+    if model_based:
+        project = open_project(project_root)
+        model_raw = next((m for m in project.models if m.get("id") == request.model_id), None)
+        if model_raw is None:
+            raise ApiError(404, "model_not_found", "Model was not found.", details={"model_id": request.model_id})
+        num_features = model_raw.get("num_features", 32)
+        num_blocks = model_raw.get("num_blocks", 4)
+        cache_key = (request.model_id, scale)
+        if cache_key in _model_cache:
+            model = _model_cache[cache_key]
+        else:
+            model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
+            core_path_str = model_raw.get("trained_core_weights_path")
+            if core_path_str:
+                core_path = Path(core_path_str)
+                if not core_path.is_absolute():
+                    core_path = project_root / core_path
+                if core_path.exists():
+                    core_state = torch.load(core_path, map_location="cpu", weights_only=False)
+                    model.body.load_state_dict(core_state)
+            _model_cache[cache_key] = model
+    else:
+        checkpoint = _resolve_checkpoint(open_project(project_root), request.run_id, request.checkpoint_id)
+        payload = validate_checkpoint_payload(project_root, checkpoint.path)
+        model_config = payload.get("model_config", {})
+        num_features = model_config.get("num_features", 32)
+        num_blocks = model_config.get("num_blocks", 4)
+        model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
+        state = payload.get("model_state_dict")
+        if state is not None:
+            model.load_state_dict(state)
+
+    _update_progress(0.3)
 
     device = torch.device(request.device)
     model = model.to(device)
@@ -306,6 +394,8 @@ def _infer_single(
         else:
             out_tensor = model(tensor)
 
+    _update_progress(0.7)
+
     out_image = _tensor_to_pil(out_tensor.squeeze(0).cpu())
     stem = img_path.stem
     ext = "." + request.output_format
@@ -314,6 +404,8 @@ def _infer_single(
         out_image.save(out_path, quality=95)
     else:
         out_image.save(out_path)
+
+    _update_progress(1.0)
     return out_path
 
 
@@ -383,7 +475,7 @@ def _pil_to_tensor(image) -> "torch.Tensor":
     import torch
 
     w, h = image.size
-    data = torch.ByteTensor(torch.ByteStorage.from_buffer(image.tobytes()))
+    data = torch.frombuffer(image.tobytes(), dtype=torch.uint8).clone()
     return data.view(h, w, 3).permute(2, 0, 1).float() / 255.0
 
 
@@ -406,7 +498,8 @@ def _resolve_checkpoint(project, run_id: str, checkpoint_id: str) -> CheckpointM
 def _resolve_output_dir(project_root: Path, project, request: InferenceRequest) -> Path:
     if request.output_dir:
         return Path(request.output_dir)
-    return project_root / "inference" / request.checkpoint_id
+    obj_id = request.checkpoint_id or request.model_id or "unknown"
+    return project_root / "inference" / obj_id
 
 
 def _list_images(folder: Path) -> list[Path]:

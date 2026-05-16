@@ -201,6 +201,11 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
+    tester.view.physicalSize = const Size(1900, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       MaterialApp(
         theme: ClassicTheme.dark(),
@@ -216,10 +221,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Templates'), findsOneWidget);
+    expect(find.text('Architectures'), findsOneWidget);
     expect(find.text('Internal residual'), findsWidgets);
-    expect(find.text('Architecture flow'), findsOneWidget);
-    expect(find.text('Hyperparameters'), findsOneWidget);
+    expect(find.text('Supported model architectures'), findsOneWidget);
+
+    await tester.tap(find.text('Create'));
+    await tester.pump();
     expect(find.text('Save as model'), findsOneWidget);
   });
 
@@ -613,6 +620,8 @@ class _FakeBackendClient extends BackendClient {
     required double l1Weight,
     required double perceptualWeight,
     required double adversarialWeight,
+    double? learningRate,
+    String? sourceCoreWeightsPath,
   }) async {
     createdRuns += 1;
     return ProjectEnvelope(
