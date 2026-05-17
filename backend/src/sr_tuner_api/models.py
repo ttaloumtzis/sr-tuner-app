@@ -62,6 +62,8 @@ class ModelObject(BaseModel):
     loss_weights: LossWeights = Field(default_factory=LossWeights)
     status: Literal["untrained", "trained"] = "untrained"
     trained_core_weights_path: str | None = None
+    core_checkpoint_id: str = ""
+    core_run_id: str = ""
     train_history: list[TrainHistoryEntry] = Field(default_factory=list)
     original_model_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

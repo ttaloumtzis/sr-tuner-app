@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from threading import Thread
 
-from fastapi import BackgroundTasks, Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -79,6 +79,7 @@ from .datasets import (
     DatasetObject,
     DatasetStorageEstimate,
     DatasetStorageEstimateRequest,
+    ReSynthesisRequest,
     ReadinessResponse,
     RegisterPairedDatasetRequest,
     VideoGenerationConfig,
@@ -86,8 +87,10 @@ from .datasets import (
     estimate_storage,
     generate_video_dataset,
     register_paired_dataset,
+    resynthesize_dataset,
     video_readiness,
 )
+from .ids import slugify
 from .errors import ApiError, api_error_handler, http_error_handler, validation_error_handler
 from .jobs import CreateJobRequest, Job, JobError, JobLogResponse, job_store, utc_now_iso
 from .metrics import (
@@ -109,7 +112,10 @@ from .metrics import (
 from .models import (
     CompatibilityResponse,
     CreateModelRequest,
+    LossWeights,
     ModelObject,
+    OptimizerConfig,
+    SchedulerConfig,
     TrainHistoryEntry,
     UpdateModelRequest,
     check_dataset_model_compatibility,
@@ -260,8 +266,8 @@ def _interrupt_training_thread(job_id: str) -> None:
 def _training_worker(project_root: Path, run_id: str, job_id: str) -> None:
     try:
         _training_worker_impl(project_root, run_id, job_id)
-    except SystemExit:
-        _set_run_state(project_root, run_id, "stopped")
+    except (SystemExit, Exception):
+        _set_run_state(project_root, run_id, "failed")
     finally:
         _training_threads.pop(job_id, None)
 
@@ -271,79 +277,81 @@ def _training_worker_impl(project_root: Path, run_id: str, job_id: str) -> None:
 
     import torch
 
-    project = open_project(project_root)
-    run = get_run(project_root, run_id)
-    raw_run = next((raw for raw in project.runs if raw.get("id") == run_id), None)
-    dataset_raw = next((raw for raw in project.datasets if raw.get("id") == run.dataset_id), None)
-    model_raw = next((raw for raw in project.models if raw.get("id") == run.model_id), None)
-    if raw_run is None or dataset_raw is None or model_raw is None:
-        job = job_store.get(job_id)
-        job.status = "failed"
-        job.finished_at = utc_now_iso()
-        job.error = JobError(code="training_context_missing", message="Training context was not found (run, dataset, or model missing).")
-        job_store.put(job)
-        _set_run_state(project_root, run_id, "failed")
-        return
-
-    dataset = DatasetObject.model_validate(dataset_raw)
-    model = ModelObject.model_validate(model_raw)
-    dataset_scale = run.metadata.get("dataset_scale") or dataset.validated_scale or dataset.scale
-
-    train_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.train_indexes or None)
-    if len(train_dataset) == 0:
-        train_dataset = build_paired_sr_dataset(project_root, dataset)
-    validation_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.validation_indexes or None)
-    if len(validation_dataset) == 0:
-        validation_dataset = train_dataset
-
-    device = torch.device(run.settings.device)
-    model_impl = build_internal_sr_model(
-        scale=dataset_scale,
-        num_features=model.num_features,
-        num_blocks=model.num_blocks,
-    ).to(device)
-
-    core_source = run.settings.source_core_weights_path
-    if core_source is None and model.trained_core_weights_path and model.status == "trained":
-        core_source = model.trained_core_weights_path
-    if core_source is None and run.lineage.fine_tune_source_checkpoint_id:
-        ckpt_id = run.lineage.fine_tune_source_checkpoint_id
-        for raw in project.runs:
-            for c in raw.get("checkpoints", []):
-                if c.get("id") == ckpt_id:
-                    ckpt_run_id = raw.get("id")
-                    core_source = f"models/{run.model_id}/core_weights/{ckpt_run_id}_core.pth"
-                    break
-    if core_source:
-        core_path = Path(core_source)
-        if not core_path.is_absolute():
-            core_path = project_root / core_path
-        if core_path.exists():
-            core_state = torch.load(core_path, map_location="cpu", weights_only=False)
-            model_impl.body.load_state_dict(core_state)
-
-    lr = run.settings.learning_rate if run.settings.learning_rate is not None else model.optimizer.lr
-    optimizer = torch.optim.Adam(model_impl.parameters(), lr=lr)
-    use_amp = run.settings.precision == "mixed" and device.type in ("cuda", "rocm")
-    if use_amp:
-        scaler = torch.amp.GradScaler()
-    else:
-        scaler = None
-    scheduler = _build_scheduler(optimizer, run.settings.scheduler.type, run.settings.epochs)
-
-    started_at = time.monotonic()
-    batch_size = max(run.settings.batch_size, 1)
-    iterations_per_epoch = math.ceil(max(len(train_dataset), 1) / batch_size)
-    validation_iterations = math.ceil(max(len(validation_dataset), 1) / batch_size)
-    validation_epochs_total = (
-        run.settings.epochs // max(run.settings.validation_split.every_epochs, 1)
-        if run.settings.validation_split.enabled and validation_iterations
-        else 0
-    )
-    total_iterations = iterations_per_epoch * run.settings.epochs + validation_iterations * validation_epochs_total
-    job = job_store.get(job_id)
-
     try:
+        project = open_project(project_root)
+        run = get_run(project_root, run_id)
+        raw_run = next((raw for raw in project.runs if raw.get("id") == run_id), None)
+        dataset_raw = next((raw for raw in project.datasets if raw.get("id") == run.dataset_id), None)
+        model_raw = next((raw for raw in project.models if raw.get("id") == run.model_id), None)
+        if raw_run is None or dataset_raw is None or model_raw is None:
+            job = job_store.get(job_id)
+            job.status = "failed"
+            job.finished_at = utc_now_iso()
+            job.error = JobError(code="training_context_missing", message="Training context was not found.")
+            job_store.put(job)
+            _set_run_state(project_root, run_id, "failed")
+            return
+
+        dataset = DatasetObject.model_validate(dataset_raw)
+        model = ModelObject.model_validate(model_raw)
+        dataset_scale = run.metadata.get("dataset_scale") or dataset.validated_scale or dataset.scale
+
+        train_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.train_indexes or None)
+        if len(train_dataset) == 0:
+            train_dataset = build_paired_sr_dataset(project_root, dataset)
+        validation_dataset = build_paired_sr_dataset(project_root, dataset, indexes=run.validation_indexes or None)
+        if len(validation_dataset) == 0:
+            validation_dataset = train_dataset
+
+        device = torch.device(run.settings.device)
+        model_impl = build_internal_sr_model(
+            scale=dataset_scale,
+            num_features=model.num_features,
+            num_blocks=model.num_blocks,
+        ).to(device)
+
+        core_source = run.settings.source_core_weights_path
+        if core_source is None and model.trained_core_weights_path and model.status == "trained":
+            core_source = model.trained_core_weights_path
+        if core_source is None and run.lineage.fine_tune_source_checkpoint_id:
+            ckpt_id = run.lineage.fine_tune_source_checkpoint_id
+            for raw in project.runs:
+                for c in raw.get("checkpoints", []):
+                    if c.get("id") == ckpt_id:
+                        ckpt_run_id = raw.get("id")
+                        core_source = f"models/{run.model_id}/core_weights/{ckpt_run_id}_core.pth"
+                        break
+        if core_source:
+            core_path = Path(core_source)
+            if not core_path.is_absolute():
+                core_path = project_root / core_path
+            if core_path.exists():
+                core_state = torch.load(core_path, map_location="cpu", weights_only=False)
+                # Core weights are saved with 'body.' prefix (from extract_core_weights).
+                # Since we load into model_impl.body, strip that prefix.
+                adjusted = {k.removeprefix("body."): v for k, v in core_state.items()}
+                model_impl.body.load_state_dict(adjusted, strict=False)
+
+        lr = run.settings.learning_rate if run.settings.learning_rate is not None else model.optimizer.lr
+        optimizer = torch.optim.Adam(model_impl.parameters(), lr=lr)
+        use_amp = run.settings.precision == "mixed" and device.type in ("cuda", "rocm")
+        if use_amp:
+            scaler = torch.amp.GradScaler()
+        else:
+            scaler = None
+        scheduler = _build_scheduler(optimizer, run.settings.scheduler.type, run.settings.epochs)
+
+        started_at = time.monotonic()
+        batch_size = max(run.settings.batch_size, 1)
+        iterations_per_epoch = math.ceil(max(len(train_dataset), 1) / batch_size)
+        validation_iterations = math.ceil(max(len(validation_dataset), 1) / batch_size)
+        validation_epochs_total = (
+            run.settings.epochs // max(run.settings.validation_split.every_epochs, 1)
+            if run.settings.validation_split.enabled and validation_iterations
+            else 0
+        )
+        total_iterations = iterations_per_epoch * run.settings.epochs + validation_iterations * validation_epochs_total
+        job = job_store.get(job_id)
         set_live_status(
             project_root,
             run.id,
@@ -589,17 +597,22 @@ def _extract_core_weights_after_training(project_root: Path, run_id: str) -> Non
             if raw_model.get("id") == model_id:
                 raw_model["trained_core_weights_path"] = stored
                 raw_model["status"] = "trained"
+                # Only set core IDs on first training — subsequent runs don't overwrite
+                if not raw_model.get("core_checkpoint_id"):
+                    raw_model["core_checkpoint_id"] = best.get("id", "")
+                    raw_model["core_run_id"] = run_id
                 raw_model["updated_at"] = utc_now_iso()
                 project.models[idx] = raw_model
                 break
         write_project(project)
     except Exception:
-        pass
+        _log.error("core_extract_failed", "Failed to extract core weights after training.")
 
 
 def _archive_run_to_model(project_root: Path, run_id: str, dataset: DatasetObject, dataset_scale: int) -> None:
     """After successful training, archive run data as train_history on the model.
     The run itself remains visible in completed state."""
+    import shutil
     project = open_project(project_root)
     raw_run = next((r for r in project.runs if r.get("id") == run_id), None)
     if raw_run is None:
@@ -619,6 +632,21 @@ def _archive_run_to_model(project_root: Path, run_id: str, dataset: DatasetObjec
         latest = max(checkpoints, key=lambda c: c.get("saved_at", ""))
         best_id = latest.get("id", "")
         best_metrics = {k: float(v) for k, v in latest.get("metrics", {}).items() if isinstance(v, (int, float))}
+    
+    # Copy .pth files to model-owned directory and update paths
+    session_dir = project_root / "models" / model_id / "archived_checkpoints" / run_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    updated_checkpoints = []
+    for c in checkpoints:
+        src_path = Path(c.get("path", ""))
+        if not src_path.is_absolute():
+            src_path = project_root / src_path
+        if src_path.exists() and src_path.suffix == ".pth":
+            dest_path = session_dir / src_path.name
+            shutil.copy2(str(src_path), str(dest_path))
+            c["path"] = str(dest_path.relative_to(project_root))
+        updated_checkpoints.append(c)
+    
     raw_settings = raw_run.get("settings", {})
     raw_lineage = raw_run.get("lineage", {})
     entry = TrainHistoryEntry(
@@ -630,7 +658,7 @@ def _archive_run_to_model(project_root: Path, run_id: str, dataset: DatasetObjec
         completed_at=utc_now_iso(),
         epochs=raw_settings.get("epochs", 0),
         best_metrics=best_metrics,
-        checkpoints=checkpoints,
+        checkpoints=updated_checkpoints,
         best_checkpoint_id=best_id,
         fine_tuned_from_checkpoint_id=raw_lineage.get("fine_tune_source_checkpoint_id") or "",
         fine_tuned_from_core_weights_path=raw_settings.get("source_core_weights_path") or "",
@@ -982,14 +1010,48 @@ def video_wizard_metadata_endpoint(
     return video_wizard_metadata(request)
 
 
-@app.post("/projects/{project_id}/datasets/{dataset_id}/resynthesize", response_model=UnsupportedState)
+@app.post("/projects/{project_id}/datasets/{dataset_id}/resynthesize", response_model=Job)
 def dataset_resynthesis_endpoint(
     project_id: str,
     dataset_id: str,
+    request: ReSynthesisRequest,
     _token: None = Depends(require_session_token),
-) -> UnsupportedState:
-    _session_project_path(project_id)
-    return UnsupportedState(code="resynthesis_unavailable", message="Re-synthesis creates a new dataset version, but this backend path is not implemented yet.")
+) -> Job:
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    job = Job(
+        type="dataset_resynthesis",
+        project_id=project.id,
+        object_id=dataset_id,
+        status="queued",
+        progress=0.0,
+        logs=["Queued re-synthesis job."],
+    )
+    job_store.put(job)
+
+    def worker() -> None:
+        try:
+            job.status = "running"
+            job.started_at = utc_now_iso()
+            job.progress = 0.02
+            job_store.put(job)
+            resynthesize_dataset(project_root, dataset_id, request, job=job, on_job=job_store.put)
+        except Exception as exc:
+            detail = getattr(exc, "detail", None)
+            if isinstance(detail, dict):
+                code = detail.get("code", "resynthesis_failed")
+                message = detail.get("message", str(exc))
+            else:
+                code = "resynthesis_failed"
+                message = str(exc)
+            job.status = "failed"
+            job.finished_at = utc_now_iso()
+            job.error = JobError(code=code, message=message)
+            job.logs = [*job.logs[-49:], message]
+            job_store.put(job)
+
+    Thread(target=worker, daemon=True).start()
+    return job
 
 
 @app.delete("/projects/{project_id}/datasets/{dataset_id}", response_model=ProjectResponse)
@@ -1335,6 +1397,282 @@ def export_model_onnx_endpoint(
     job.project_id = project_id
     job_store.put(job)
     return job
+
+
+@app.post(
+    "/projects/{project_id}/models/{model_id}/checkpoints/{run_id}/{checkpoint_id}/set-core",
+    response_model=ProjectResponse,
+)
+def set_checkpoint_as_core_endpoint(
+    project_id: str,
+    model_id: str,
+    run_id: str,
+    checkpoint_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    import os
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    model_raw = next((m for m in project.models if m.get("id") == model_id), None)
+    if model_raw is None:
+        raise ApiError(404, "model_not_found", "Model was not found.")
+    checkpoint_path = None
+    for session in model_raw.get("train_history", []):
+        for ckpt in session.get("checkpoints", []):
+            if ckpt.get("id") == checkpoint_id:
+                checkpoint_path = ckpt.get("path", "")
+                break
+        if checkpoint_path:
+            break
+    if not checkpoint_path:
+        raise ApiError(404, "checkpoint_not_found", "Checkpoint not found in model train history.")
+    ckpt_full = Path(checkpoint_path)
+    if not ckpt_full.is_absolute():
+        ckpt_full = project_root / ckpt_full
+    if not ckpt_full.exists():
+        raise ApiError(404, "checkpoint_file_missing", "Checkpoint file not found on disk.")
+    stored = extract_and_save_core_weights(ckpt_full, project_root, model_id, run_id)
+    for idx, raw in enumerate(project.models):
+        if raw.get("id") == model_id:
+            raw["core_checkpoint_id"] = checkpoint_id
+            raw["core_run_id"] = run_id
+            raw["trained_core_weights_path"] = stored
+            raw["status"] = "trained"
+            raw["updated_at"] = utc_now_iso()
+            project.models[idx] = raw
+            break
+    project = write_project(project)
+    return _project_response(project)
+
+
+@app.post(
+    "/projects/{project_id}/models/{model_id}/checkpoints/{run_id}/{checkpoint_id}/export-package",
+    response_model=Job,
+)
+def export_model_package_endpoint(
+    project_id: str,
+    model_id: str,
+    run_id: str,
+    checkpoint_id: str,
+    request: ExportPthRequest,
+    _token: None = Depends(require_session_token),
+) -> Job:
+    import json as json_lib
+    import shutil
+    import tempfile
+    import zipfile
+    from datetime import date
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    model_raw = next((m for m in project.models if m.get("id") == model_id), None)
+    if model_raw is None:
+        raise ApiError(404, "model_not_found", "Model was not found.")
+    checkpoint_path = None
+    for session in model_raw.get("train_history", []):
+        for ckpt in session.get("checkpoints", []):
+            if ckpt.get("id") == checkpoint_id:
+                checkpoint_path = ckpt.get("path", "")
+                break
+        if checkpoint_path:
+            break
+    if not checkpoint_path:
+        raise ApiError(404, "checkpoint_not_found", "Checkpoint not found in model train history.")
+    ckpt_full = Path(checkpoint_path)
+    if not ckpt_full.is_absolute():
+        ckpt_full = project_root / ckpt_full
+    if not ckpt_full.exists():
+        raise ApiError(404, "checkpoint_file_missing", "Checkpoint file not found on disk.")
+    model_name = model_raw.get("name", "model")
+    export_date = date.today().isoformat()
+    zip_name = f"{model_name}_{export_date}.zip"
+    dest_dir = Path(request.destination)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = dest_dir / zip_name
+    config = {
+        "architecture": model_raw.get("architecture", "internal_residual_pixelshuffle"),
+        "num_features": model_raw.get("num_features", 32),
+        "num_blocks": model_raw.get("num_blocks", 4),
+        "optimizer": model_raw.get("optimizer", {}),
+        "scheduler": model_raw.get("scheduler", {}),
+        "loss_weights": model_raw.get("loss_weights", {}),
+    }
+    metadata = {
+        "name": model_name,
+        "exported_at": utc_now_iso(),
+        "source_project": project_id,
+        "source_model": model_id,
+        "core_checkpoint_id": model_raw.get("core_checkpoint_id", ""),
+        "core_run_id": model_raw.get("core_run_id", ""),
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        shutil.copy2(str(ckpt_full), str(tmp_path / "model.pth"))
+        with open(tmp_path / "config.json", "w") as f:
+            json_lib.dump(config, f, indent=2)
+        with open(tmp_path / "metadata.json", "w") as f:
+            json_lib.dump(metadata, f, indent=2)
+        with zipfile.ZipFile(str(zip_path), "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(str(tmp_path / "model.pth"), "model.pth")
+            zf.write(str(tmp_path / "config.json"), "config.json")
+            zf.write(str(tmp_path / "metadata.json"), "metadata.json")
+    job = Job(
+        type="export_model_package",
+        project_id=project_id,
+        object_id=checkpoint_id,
+        status="completed",
+        progress=1.0,
+        finished_at=utc_now_iso(),
+        logs=[f"Exported package to {zip_path}."],
+    )
+    job.project_id = project_id
+    job_store.put(job)
+    return job
+
+
+@app.post("/projects/{project_id}/import-model-package", response_model=ProjectResponse)
+def import_model_package_endpoint(
+    project_id: str,
+    file: UploadFile,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    import json as json_lib
+    import shutil
+    import tempfile
+    import zipfile
+    project_root = _session_project_path(project_id)
+    if not file.filename or not file.filename.endswith(".zip"):
+        raise ApiError(422, "invalid_package", "Uploaded file must be a .zip package.")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        zip_path = tmp_path / "package.zip"
+        with open(zip_path, "wb") as f:
+            f.write(file.file.read())
+        with zipfile.ZipFile(str(zip_path), "r") as zf:
+            zf.extractall(str(tmp_path))
+        config_path = tmp_path / "config.json"
+        pth_path = tmp_path / "model.pth"
+        if not config_path.exists() or not pth_path.exists():
+            raise ApiError(422, "invalid_package", "Package must contain config.json and model.pth.")
+        with open(config_path) as f:
+            config = json_lib.load(f)
+        project = open_project(project_root)
+        model = ModelObject(
+            name=config.get("name", file.filename.replace(".zip", "")),
+            slug=slugify(config.get("name", file.filename.replace(".zip", ""))),
+            architecture=config.get("architecture", "internal_residual_pixelshuffle"),
+            num_features=config.get("num_features", 32),
+            num_blocks=config.get("num_blocks", 4),
+        )
+        if config.get("optimizer"):
+            model.optimizer = OptimizerConfig(**config["optimizer"])
+        if config.get("scheduler"):
+            model.scheduler = SchedulerConfig(**config["scheduler"])
+        if config.get("loss_weights"):
+            model.loss_weights = LossWeights(**config["loss_weights"])
+        core_dir = project_root / "models" / model.id / "core_weights"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        dest_pth = core_dir / "imported_core.pth"
+        shutil.copy2(str(pth_path), str(dest_pth))
+        model.trained_core_weights_path = str(dest_pth.relative_to(project_root))
+        model.status = "trained"
+    model.core_checkpoint_id = "imported"
+    model.core_run_id = "imported"
+    entry = TrainHistoryEntry(
+        session_id="imported",
+        dataset_id="",
+        dataset_name="Imported package",
+        scale=0,
+        started_at="",
+        completed_at=utc_now_iso(),
+        epochs=0,
+        checkpoints=[],
+        best_checkpoint_id="",
+    )
+    model.train_history.append(entry)
+    project.models.append(model.model_dump())
+    project = write_project(project)
+    return _project_response(project)
+
+
+@app.delete(
+    "/projects/{project_id}/models/{model_id}/checkpoints/{checkpoint_id}",
+    response_model=ProjectResponse,
+)
+def delete_archived_checkpoint_endpoint(
+    project_id: str,
+    model_id: str,
+    checkpoint_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    model_raw = next((m for m in project.models if m.get("id") == model_id), None)
+    if model_raw is None:
+        raise ApiError(404, "model_not_found", "Model was not found.")
+    removed = False
+    for session in model_raw.get("train_history", []):
+        ckpts = session.get("checkpoints", [])
+        for ci, ckpt in enumerate(ckpts):
+            if ckpt.get("id") == checkpoint_id:
+                ckpt_path = Path(ckpt.get("path", ""))
+                if not ckpt_path.is_absolute():
+                    ckpt_path = project_root / ckpt_path
+                if ckpt_path.exists():
+                    ckpt_path.unlink()
+                del ckpts[ci]
+                removed = True
+                break
+        if removed:
+            break
+    if not removed:
+        raise ApiError(404, "checkpoint_not_found", "Checkpoint not found in model train history.")
+    # Clean up empty sessions
+    model_raw["train_history"] = [
+        s for s in model_raw["train_history"]
+        if s.get("checkpoints", [])
+    ]
+    model_raw["updated_at"] = utc_now_iso()
+    for idx, raw in enumerate(project.models):
+        if raw.get("id") == model_id:
+            project.models[idx] = model_raw
+            break
+    project = write_project(project)
+    return _project_response(project)
+
+
+@app.delete(
+    "/projects/{project_id}/models/{model_id}/sessions/{session_id}",
+    response_model=ProjectResponse,
+)
+def delete_archived_session_endpoint(
+    project_id: str,
+    model_id: str,
+    session_id: str,
+    _token: None = Depends(require_session_token),
+) -> ProjectResponse:
+    import shutil
+    project_root = _session_project_path(project_id)
+    project = open_project(project_root)
+    model_raw = next((m for m in project.models if m.get("id") == model_id), None)
+    if model_raw is None:
+        raise ApiError(404, "model_not_found", "Model was not found.")
+    session_dir = project_root / "models" / model_id / "archived_checkpoints" / session_id
+    if session_dir.exists():
+        shutil.rmtree(str(session_dir))
+    original_len = len(model_raw.get("train_history", []))
+    model_raw["train_history"] = [
+        s for s in model_raw["train_history"]
+        if s.get("session_id") != session_id
+    ]
+    if len(model_raw["train_history"]) == original_len:
+        raise ApiError(404, "session_not_found", "Session not found in model train history.")
+    model_raw["updated_at"] = utc_now_iso()
+    for idx, raw in enumerate(project.models):
+        if raw.get("id") == model_id:
+            project.models[idx] = model_raw
+            break
+    project = write_project(project)
+    return _project_response(project)
 
 
 @app.get("/dependencies/inference", response_model=InferenceReadinessResponse)

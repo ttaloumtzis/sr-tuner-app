@@ -1,0 +1,11 @@
+name: checkpoints-as-model-version-manager
+title: Checkpoints tab as model version manager
+status: proposed
+created_at: 2026-05-16
+author: auto
+priority: high
+description: >
+  Rewrite the checkpoints tab from a flat per-run list to a model-centric version
+  browser. Users select a model from a sidebar, browse archived training sessions,
+  pick which checkpoint is the active "core", delete unwanted history, and
+  export/import complete model packages (.zip with weights + config).

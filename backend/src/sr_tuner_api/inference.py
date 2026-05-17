@@ -367,7 +367,8 @@ def _infer_single(
                     core_path = project_root / core_path
                 if core_path.exists():
                     core_state = torch.load(core_path, map_location="cpu", weights_only=False)
-                    model.body.load_state_dict(core_state)
+                    adjusted = {k.removeprefix("body."): v for k, v in core_state.items()}
+                    model.body.load_state_dict(adjusted, strict=False)
             _model_cache[cache_key] = model
     else:
         checkpoint = _resolve_checkpoint(open_project(project_root), request.run_id, request.checkpoint_id)

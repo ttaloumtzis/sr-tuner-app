@@ -207,6 +207,12 @@ class BackendClient {
     required int scale,
     required double fps,
     int? frameLimit,
+    String downscaleMethod = 'bicubic',
+    String outputFormat = 'png',
+    double preBlur = 0.0,
+    double blur = 0.0,
+    double noise = 0.0,
+    int jpegQuality = 95,
   }) async {
     return VideoWizardMetadata.fromJson(
       await _post('/projects/$projectId/datasets/video/metadata', {
@@ -215,18 +221,35 @@ class BackendClient {
         'scale': scale,
         'fps': fps,
         'frame_limit': frameLimit,
-        'output_format': 'png',
-        'downscale_method': 'bicubic',
+        'output_format': outputFormat,
+        'downscale_method': downscaleMethod,
+        'pre_blur': preBlur,
+        'blur': blur,
+        'noise': noise,
+        'jpeg_quality': jpegQuality,
       }),
     );
   }
 
-  Future<UnsupportedState> resynthesizeDataset({
+  Future<JobState> resynthesizeDataset({
     required String projectId,
     required String datasetId,
+    String? downscaleMethod,
+    String? outputFormat,
+    double? preBlur,
+    double? blur,
+    double? noise,
+    int? jpegQuality,
   }) async {
-    return UnsupportedState.fromJson(
-      await _post('/projects/$projectId/datasets/$datasetId/resynthesize', {}),
+    return JobState.fromJson(
+      await _post('/projects/$projectId/datasets/$datasetId/resynthesize', {
+        if (downscaleMethod != null) 'downscale_method': downscaleMethod,
+        if (outputFormat != null) 'output_format': outputFormat,
+        if (preBlur != null) 'pre_blur': preBlur,
+        if (blur != null) 'blur': blur,
+        if (noise != null) 'noise': noise,
+        if (jpegQuality != null) 'jpeg_quality': jpegQuality,
+      }),
     );
   }
 
@@ -245,6 +268,12 @@ class BackendClient {
     required int scale,
     required double fps,
     int? frameLimit,
+    String downscaleMethod = 'bicubic',
+    String outputFormat = 'png',
+    double preBlur = 0.0,
+    double blur = 0.0,
+    double noise = 0.0,
+    int jpegQuality = 95,
   }) async {
     final response = await _post('/projects/$projectId/datasets/video', {
       'name': name,
@@ -252,8 +281,12 @@ class BackendClient {
       'scale': scale,
       'fps': fps,
       'frame_limit': frameLimit,
-      'output_format': 'png',
-      'downscale_method': 'bicubic',
+      'output_format': outputFormat,
+      'downscale_method': downscaleMethod,
+      'pre_blur': preBlur,
+      'blur': blur,
+      'noise': noise,
+      'jpeg_quality': jpegQuality,
     });
     return ProjectEnvelope.fromJson(response);
   }
@@ -265,6 +298,12 @@ class BackendClient {
     required int scale,
     required double fps,
     int? frameLimit,
+    String downscaleMethod = 'bicubic',
+    String outputFormat = 'png',
+    double preBlur = 0.0,
+    double blur = 0.0,
+    double noise = 0.0,
+    int jpegQuality = 95,
   }) async {
     final response = await _post('/projects/$projectId/datasets/video/start', {
       'name': name,
@@ -272,8 +311,12 @@ class BackendClient {
       'scale': scale,
       'fps': fps,
       'frame_limit': frameLimit,
-      'output_format': 'png',
-      'downscale_method': 'bicubic',
+      'output_format': outputFormat,
+      'downscale_method': downscaleMethod,
+      'pre_blur': preBlur,
+      'blur': blur,
+      'noise': noise,
+      'jpeg_quality': jpegQuality,
     });
     return JobState.fromJson(response);
   }
@@ -652,6 +695,72 @@ class BackendClient {
       {'destination': destination},
     );
     return JobState.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> setCheckpointAsCore({
+    required String projectId,
+    required String modelId,
+    required String runId,
+    required String checkpointId,
+  }) async {
+    final response = await _post(
+      '/projects/$projectId/models/$modelId/checkpoints/$runId/$checkpointId/set-core',
+      {},
+    );
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<JobState> exportModelPackage({
+    required String projectId,
+    required String modelId,
+    required String runId,
+    required String checkpointId,
+    required String destination,
+  }) async {
+    final response = await _post(
+      '/projects/$projectId/models/$modelId/checkpoints/$runId/$checkpointId/export-package',
+      {'destination': destination},
+    );
+    return JobState.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> importModelPackage({
+    required String projectId,
+    required String filePath,
+  }) async {
+    final request = await _httpClient.openUrl(
+      'POST',
+      AppConfig.apiUri('/projects/$projectId/import-model-package'),
+    );
+    _addCommonHeaders(request);
+    request.headers.set('Content-Type', 'application/octet-stream');
+    final file = File(filePath);
+    await request.addStream(file.openRead());
+    final response = await request.close();
+    final result = await _readJson(response);
+    return ProjectEnvelope.fromJson(result);
+  }
+
+  Future<ProjectEnvelope> deleteArchivedCheckpoint({
+    required String projectId,
+    required String modelId,
+    required String checkpointId,
+  }) async {
+    final response = await _delete(
+      '/projects/$projectId/models/$modelId/checkpoints/$checkpointId',
+    );
+    return ProjectEnvelope.fromJson(response);
+  }
+
+  Future<ProjectEnvelope> deleteArchivedSession({
+    required String projectId,
+    required String modelId,
+    required String sessionId,
+  }) async {
+    final response = await _delete(
+      '/projects/$projectId/models/$modelId/sessions/$sessionId',
+    );
+    return ProjectEnvelope.fromJson(response);
   }
 
   Future<JobState> getJob(String jobId) async {

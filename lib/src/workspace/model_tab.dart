@@ -223,6 +223,7 @@ class _ModelTabState extends State<ModelTab> {
                                 features: _features,
                                 blocks: _blocks,
                                 busy: _busy,
+                                selectedTemplate: _selected,
                                 onFeaturesChanged: (v) => setState(() { _features = v; _featuresCtrl.text = v.toString(); }),
                                 onFeaturesTextChanged: (t) {
                                   final v = int.tryParse(t);
@@ -375,6 +376,7 @@ class _CreatePanel extends StatelessWidget {
     required this.onBlocksTextChanged,
     required this.onSave,
     required this.onReset,
+    this.selectedTemplate,
   });
 
   final TextEditingController name;
@@ -383,6 +385,7 @@ class _CreatePanel extends StatelessWidget {
   final int features;
   final int blocks;
   final bool busy;
+  final ModelTemplate? selectedTemplate;
   final ValueChanged<int> onFeaturesChanged;
   final ValueChanged<String> onFeaturesTextChanged;
   final ValueChanged<int> onBlocksChanged;
@@ -390,27 +393,37 @@ class _CreatePanel extends StatelessWidget {
   final VoidCallback onSave;
   final VoidCallback onReset;
 
+  bool get _isSupported => selectedTemplate?.supportState == 'supported';
+
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    return ListView(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SrBanner(
-          title: 'Scale-agnostic architecture',
-          message: 'I/O layers are auto-configured from dataset scale at training time. Output scale is configurable at inference.',
-          severity: 'info',
-        ),
-        SizedBox(height: tokens.gap),
-        TextField(
-          controller: name,
-          decoration: const InputDecoration(labelText: 'Model name'),
-        ),
-        SizedBox(height: tokens.gap),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        Expanded(
+          child: ListView(
+            children: [
+              if (!_isSupported && selectedTemplate != null)
+                SrBanner(
+                  message: '${selectedTemplate!.displayName} is coming soon — only Internal Residual PixelShuffle can be trained today.',
+                  severity: 'info',
+                )
+              else
+                SrBanner(
+                  title: 'Scale-agnostic architecture',
+                  message: 'I/O layers are auto-configured from dataset scale at training time. Output scale is configurable at inference.',
+                  severity: 'info',
+                ),
+              SizedBox(height: tokens.gap),
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Model name'),
+                enabled: _isSupported,
+              ),
+              SizedBox(height: tokens.gap),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('Features: $features', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 4),
@@ -436,14 +449,7 @@ class _CreatePanel extends StatelessWidget {
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            SizedBox(width: tokens.gap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 8),
                   Text('Blocks: $blocks', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 4),
                   Row(
@@ -470,31 +476,133 @@ class _CreatePanel extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ],
+              SizedBox(height: tokens.gap),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : onReset,
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: (busy || !_isSupported) ? null : onSave,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save as model'),
+                  ),
+                ],
+              ),
+              if (busy) ...[
+                SizedBox(height: tokens.compactGap),
+                const SrProgressBar(kind: SrProgressKind.indeterminate),
+              ],
+            ],
+          ),
         ),
-        SizedBox(height: tokens.gap),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              onPressed: busy ? null : onReset,
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('Reset'),
-            ),
-            FilledButton.icon(
-              onPressed: busy ? null : onSave,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save as model'),
-            ),
-          ],
+        SizedBox(width: tokens.gap),
+        SizedBox(
+          width: 260,
+          child: _HardwareEstimatePanel(features: features, blocks: blocks),
         ),
-        if (busy) ...[
-          SizedBox(height: tokens.compactGap),
-          const SrProgressBar(kind: SrProgressKind.indeterminate),
-        ],
       ],
+    );
+  }
+}
+
+// ── Hardware Estimate Panel ────────────────────────────────────────────────────
+
+class _HardwareEstimatePanel extends StatelessWidget {
+  const _HardwareEstimatePanel({required this.features, required this.blocks});
+
+  final int features;
+  final int blocks;
+
+  static int _paramCount(int f, int b) =>
+      (f * f * b * 18) + (f * 3 * 18);
+
+  static String _fmtBytes(int bytes) {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+    }
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = srTokens(context);
+    final params = _paramCount(features, blocks);
+    final paramB = params * 4;   // float32
+    final gradB  = params * 4;
+    final optB   = params * 4 * 2;  // Adam: first + second moment
+    final totalB = paramB + gradB + optB;
+
+    return SrSection(
+      title: 'Hardware estimate',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Row(label: 'Parameters', value: _formatCount(params), tokens: tokens, bold: true),
+          const SizedBox(height: 12),
+          Text('Memory breakdown (float32)', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.muted)),
+          const SizedBox(height: 6),
+          _Row(label: 'Bare model', value: _fmtBytes(paramB), tokens: tokens),
+          _Row(label: '+ Gradients', value: '+${_fmtBytes(gradB)}', tokens: tokens),
+          _Row(label: '+ Optimizer', value: '+${_fmtBytes(optB)}', tokens: tokens,
+              note: 'Adam (2× moments)'),
+          Divider(color: tokens.border, height: 16),
+          _Row(label: 'Training peak', value: '~${_fmtBytes(totalB)}', tokens: tokens, bold: true),
+          const SizedBox(height: 8),
+          Text(
+            'Excludes activations. See Training tab for full VRAM estimate with batch size and crop.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.muted, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.label,
+    required this.value,
+    required this.tokens,
+    this.note,
+    this.bold = false,
+  });
+
+  final String label;
+  final String value;
+  final SrTokens tokens;
+  final String? note;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = bold
+        ? Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)
+        : Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: style),
+                if (note != null)
+                  Text(note!, style: TextStyle(fontSize: 10, color: tokens.muted)),
+              ],
+            ),
+          ),
+          Text(value, style: style?.copyWith(color: bold ? null : tokens.accent)),
+        ],
+      ),
     );
   }
 }

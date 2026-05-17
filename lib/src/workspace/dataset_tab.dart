@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,12 @@ class _DatasetTabState extends State<DatasetTab> {
   int _previewIndex = 0;
   String _validationMode = 'quick';
   String _storageOperation = 'reference';
+  String _videoDownscaleMethod = 'bicubic';
+  double _videoPreBlur = 0.0;
+  double _videoBlur = 0.0;
+  double _videoNoise = 0.0;
+  String _videoOutputFormat = 'png';
+  int _videoJpegQuality = 95;
   bool _busy = false;
   String? _error;
   String? _selectedDatasetId;
@@ -270,6 +277,12 @@ class _DatasetTabState extends State<DatasetTab> {
         scale: _videoScale,
         fps: double.tryParse(_videoFps.text.trim()) ?? 1.0,
         frameLimit: int.tryParse(_frameLimit.text.trim()),
+        downscaleMethod: _videoDownscaleMethod,
+        outputFormat: _videoOutputFormat,
+        preBlur: _videoPreBlur,
+        blur: _videoBlur,
+        noise: _videoNoise,
+        jpegQuality: _videoJpegQuality,
       );
       if (mounted) {
         setState(() => _videoMetadata = metadata);
@@ -365,6 +378,12 @@ class _DatasetTabState extends State<DatasetTab> {
         scale: _videoScale,
         fps: double.tryParse(_videoFps.text.trim()) ?? 1.0,
         frameLimit: int.tryParse(_frameLimit.text.trim()),
+        downscaleMethod: _videoDownscaleMethod,
+        outputFormat: _videoOutputFormat,
+        preBlur: _videoPreBlur,
+        blur: _videoBlur,
+        noise: _videoNoise,
+        jpegQuality: _videoJpegQuality,
       );
     } catch (error) {
       setState(() => _error = error.toString());
@@ -437,6 +456,33 @@ class _DatasetTabState extends State<DatasetTab> {
     }
   }
 
+  Future<void> _resynthesizeSelectedDataset(Map<String, dynamic> overrides) async {
+    final dataset = _selectedDataset(widget.project);
+    if (dataset == null) return;
+    final datasetId = dataset.id;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _DatasetCreationProgressDialog(
+        title: 'Re-synthesizing dataset',
+        start: () => widget.client.resynthesizeDataset(
+          projectId: widget.project.id,
+          datasetId: datasetId,
+          downscaleMethod: overrides['downscale_method'] as String?,
+          outputFormat: overrides['output_format'] as String?,
+          preBlur: (overrides['pre_blur'] as num?)?.toDouble(),
+          blur: (overrides['blur'] as num?)?.toDouble(),
+          noise: (overrides['noise'] as num?)?.toDouble(),
+          jpegQuality: overrides['jpeg_quality'] as int?,
+        ),
+        getJob: widget.client.getJob,
+        onCompleted: () async {
+          await _loadDetail(datasetId: datasetId);
+        },
+      ),
+    );
+  }
+
   Future<void> _showVideoWizard() async {
     await _loadVideoMetadata();
     if (!mounted) {
@@ -454,11 +500,30 @@ class _DatasetTabState extends State<DatasetTab> {
             fps: _videoFps,
             frameLimit: _frameLimit,
             scale: _videoScale,
+            downscaleMethod: _videoDownscaleMethod,
+            preBlur: _videoPreBlur,
+            blur: _videoBlur,
+            noise: _videoNoise,
+            outputFormat: _videoOutputFormat,
+            jpegQuality: _videoJpegQuality,
             metadata: _videoMetadata,
             onScaleChanged: (value) {
               setState(() => _videoScale = value);
               _loadVideoMetadata();
             },
+            onDownscaleMethodChanged: (value) {
+              setState(() => _videoDownscaleMethod = value);
+              _loadVideoMetadata();
+            },
+            onPreBlurChanged: (value) => setState(() => _videoPreBlur = value),
+            onBlurChanged: (value) => setState(() => _videoBlur = value),
+            onNoiseChanged: (value) => setState(() => _videoNoise = value),
+            onOutputFormatChanged: (value) {
+              setState(() => _videoOutputFormat = value);
+              _loadVideoMetadata();
+            },
+            onJpegQualityChanged: (value) =>
+                setState(() => _videoJpegQuality = value),
             onPickVideo: _pickVideo,
             onRefresh: _loadVideoMetadata,
           ),
@@ -493,6 +558,8 @@ class _DatasetTabState extends State<DatasetTab> {
               busy: _busy,
               videoMessage: _videoReadiness?.message ?? 'Checking video tools.',
               onCreateDataset: _showCreateDatasetDialog,
+              onCreatePaired: _showPairedDatasetDialog,
+              onCreateVideo: _showVideoWizard,
               error: _error,
             )
           : _DatasetPopulatedState(
@@ -514,6 +581,7 @@ class _DatasetTabState extends State<DatasetTab> {
               onExport: () {},
               onDelete: _deleteSelectedDataset,
               onPreview: (index) => _loadDetail(previewIndex: index),
+              onResynthesize: _resynthesizeSelectedDataset,
             ),
     );
   }
@@ -524,12 +592,16 @@ class _DatasetEmptyState extends StatelessWidget {
     required this.busy,
     required this.videoMessage,
     required this.onCreateDataset,
+    required this.onCreatePaired,
+    required this.onCreateVideo,
     this.error,
   });
 
   final bool busy;
   final String videoMessage;
   final VoidCallback onCreateDataset;
+  final VoidCallback onCreatePaired;
+  final VoidCallback onCreateVideo;
   final String? error;
 
   @override
@@ -538,19 +610,10 @@ class _DatasetEmptyState extends StatelessWidget {
     return ListView(
       children: [
         SrBanner(
-          title: 'Beginner guidance',
+          title: 'Getting started',
           message:
-              'Start with a small, clean set of matching low-resolution and high-resolution pairs. Folders remain referenced unless you choose copy or move.',
+              'Create a dataset to begin. Use Type 1 if you already have matched HR/LR image folders, or Type 2 to extract pairs automatically from a video file.',
           severity: 'info',
-        ),
-        SizedBox(height: tokens.compactGap),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            onPressed: busy ? null : onCreateDataset,
-            icon: const Icon(Icons.add),
-            label: const Text('Create dataset'),
-          ),
         ),
         SizedBox(height: tokens.gap),
         Row(
@@ -559,23 +622,34 @@ class _DatasetEmptyState extends StatelessWidget {
             Expanded(
               child: _OnboardingCard(
                 icon: Icons.folder_copy_outlined,
-                title: 'Type 1 paired folders',
-                message: 'Register existing HR/LR folders by filename stem.',
-                action: 'Create dataset',
-                onPressed: busy ? null : onCreateDataset,
+                title: 'Type 1 · Paired folders',
+                message:
+                    'Register a folder containing HR/ and LR/ subfolders. Supports PNG, JPG, WebP, and TIFF. Files are matched by filename stem.',
+                action: 'Create paired dataset',
+                onPressed: busy ? null : onCreatePaired,
               ),
             ),
             SizedBox(width: tokens.gap),
             Expanded(
               child: _OnboardingCard(
                 icon: Icons.video_file_outlined,
-                title: 'Type 2 from video',
-                message: videoMessage,
-                action: 'Create dataset',
-                onPressed: busy ? null : onCreateDataset,
+                title: 'Type 2 · Extract from video',
+                message:
+                    'Generate HR/LR pairs automatically by sampling frames from a video file. $videoMessage',
+                action: 'Create from video',
+                onPressed: busy ? null : onCreateVideo,
               ),
             ),
           ],
+        ),
+        SizedBox(height: tokens.compactGap),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: busy ? null : onCreateDataset,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Or choose type…'),
+          ),
         ),
         if (busy) ...[
           SizedBox(height: tokens.gap),
@@ -601,6 +675,7 @@ class _DatasetPopulatedState extends StatelessWidget {
     required this.onExport,
     required this.onDelete,
     required this.onPreview,
+    required this.onResynthesize,
     this.error,
   });
 
@@ -613,6 +688,7 @@ class _DatasetPopulatedState extends StatelessWidget {
   final VoidCallback onExport;
   final VoidCallback onDelete;
   final ValueChanged<int> onPreview;
+  final Future<void> Function(Map<String, dynamic> overrides) onResynthesize;
   final String? error;
 
   @override
@@ -685,6 +761,8 @@ class _DatasetPopulatedState extends StatelessWidget {
                           _SourceList(detail: detail!),
                           SizedBox(height: tokens.gap),
                           _HealthChecks(detail: detail!),
+                          SizedBox(height: tokens.gap),
+                          _PipelineCard(detail: detail!, onResynthesize: onResynthesize),
                         ],
                       ),
                     ),
@@ -697,9 +775,9 @@ class _DatasetPopulatedState extends StatelessWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: _PipelineCard(detail: detail!)),
-                              SizedBox(width: tokens.gap),
                               Expanded(child: _HistogramCard(detail: detail!)),
+                              SizedBox(width: tokens.gap),
+                              Expanded(child: _DatasetMetadataCard(detail: detail!)),
                             ],
                           ),
                         ],
@@ -830,8 +908,24 @@ class _PairedDatasetForm extends StatelessWidget {
           SrBanner(
             title: 'Type 1 dataset',
             message:
-                'Use a folder containing HR and LR subfolders. Files are matched by filename stem.',
+                'Use a folder containing HR and LR subfolders. Files are matched by filename stem. Supports PNG, JPG, WebP, and TIFF.',
             severity: 'info',
+          ),
+          SizedBox(height: tokens.compactGap),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: tokens.panel,
+              border: Border.all(color: tokens.border),
+              borderRadius: BorderRadius.circular(tokens.radius),
+            ),
+            child: Text(
+              'dataset/\n  HR/  ← high-resolution images\n  LR/  ← low-resolution images',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontFamily: 'monospace', color: tokens.muted),
+            ),
           ),
           SizedBox(height: tokens.compactGap),
           TextField(
@@ -1047,8 +1141,20 @@ class _VideoWizard extends StatelessWidget {
     required this.fps,
     required this.frameLimit,
     required this.scale,
+    required this.downscaleMethod,
+    required this.preBlur,
+    required this.blur,
+    required this.noise,
+    required this.outputFormat,
+    required this.jpegQuality,
     required this.metadata,
     required this.onScaleChanged,
+    required this.onDownscaleMethodChanged,
+    required this.onPreBlurChanged,
+    required this.onBlurChanged,
+    required this.onNoiseChanged,
+    required this.onOutputFormatChanged,
+    required this.onJpegQualityChanged,
     required this.onPickVideo,
     required this.onRefresh,
   });
@@ -1058,8 +1164,20 @@ class _VideoWizard extends StatelessWidget {
   final TextEditingController fps;
   final TextEditingController frameLimit;
   final int scale;
+  final String downscaleMethod;
+  final double preBlur;
+  final double blur;
+  final double noise;
+  final String outputFormat;
+  final int jpegQuality;
   final VideoWizardMetadata? metadata;
   final ValueChanged<int> onScaleChanged;
+  final ValueChanged<String> onDownscaleMethodChanged;
+  final ValueChanged<double> onPreBlurChanged;
+  final ValueChanged<double> onBlurChanged;
+  final ValueChanged<double> onNoiseChanged;
+  final ValueChanged<String> onOutputFormatChanged;
+  final ValueChanged<int> onJpegQualityChanged;
   final VoidCallback onPickVideo;
   final VoidCallback onRefresh;
 
@@ -1114,9 +1232,47 @@ class _VideoWizard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: downscaleMethod,
+                  decoration:
+                      const InputDecoration(labelText: 'Downscale method'),
+                  items: const [
+                    DropdownMenuItem(value: 'bicubic', child: Text('Bicubic')),
+                    DropdownMenuItem(
+                        value: 'bilinear', child: Text('Bilinear')),
+                    DropdownMenuItem(value: 'lanczos', child: Text('Lanczos')),
+                    DropdownMenuItem(value: 'nearest', child: Text('Nearest')),
+                    DropdownMenuItem(value: 'area', child: Text('Area')),
+                  ],
+                  onChanged: (v) => onDownscaleMethodChanged(v ?? 'bicubic'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: outputFormat,
+                  decoration:
+                      const InputDecoration(labelText: 'Output format'),
+                  items: const [
+                    DropdownMenuItem(value: 'png', child: Text('PNG')),
+                    DropdownMenuItem(value: 'jpg', child: Text('JPEG')),
+                  ],
+                  onChanged: (v) => onOutputFormatChanged(v ?? 'png'),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: tokens.compactGap),
+          Row(
+            children: [
+              Expanded(
                 child: TextField(
                   controller: fps,
-                  decoration: const InputDecoration(labelText: 'Frames/sec'),
+                  decoration: InputDecoration(
+                    labelText: 'Frames/sec',
+                    helperText: '1–5 fps for distinct frames; higher may produce duplicates.',
+                    helperMaxLines: 2,
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => onRefresh(),
                 ),
@@ -1133,6 +1289,43 @@ class _VideoWizard extends StatelessWidget {
             ],
           ),
           SizedBox(height: tokens.compactGap),
+          Text('Degradation pipeline',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          _SliderRow(
+            label: 'Pre-blur σ',
+            value: preBlur,
+            min: 0.0,
+            max: 3.0,
+            divisions: 30,
+            onChanged: onPreBlurChanged,
+          ),
+          _SliderRow(
+            label: 'Post-blur σ',
+            value: blur,
+            min: 0.0,
+            max: 5.0,
+            divisions: 50,
+            onChanged: onBlurChanged,
+          ),
+          _SliderRow(
+            label: 'Noise',
+            value: noise,
+            min: 0.0,
+            max: 50.0,
+            divisions: 50,
+            onChanged: onNoiseChanged,
+          ),
+          if (outputFormat == 'jpg')
+            _SliderRow(
+              label: 'JPEG quality',
+              value: jpegQuality.toDouble(),
+              min: 1,
+              max: 100,
+              divisions: 99,
+              onChanged: (v) => onJpegQualityChanged(v.round()),
+            ),
+          SizedBox(height: tokens.compactGap),
           if (value != null && value.exists)
             Wrap(
               spacing: 8,
@@ -1143,6 +1336,11 @@ class _VideoWizard extends StatelessWidget {
                   SrChip(label: '${value.estimatedYield} pairs'),
                 if (value.outputSizeBytes != null)
                   SrChip(label: _formatBytes(value.outputSizeBytes!)),
+                SrChip(label: outputFormat.toUpperCase()),
+                SrChip(label: downscaleMethod),
+                if (preBlur > 0) SrChip(label: 'pre-blur σ=${preBlur.toStringAsFixed(1)}'),
+                if (blur > 0) SrChip(label: 'blur σ=${blur.toStringAsFixed(1)}'),
+                if (noise > 0) SrChip(label: 'noise=${noise.toStringAsFixed(0)}'),
               ],
             )
           else
@@ -1238,43 +1436,110 @@ class _HealthChecks extends StatelessWidget {
   }
 }
 
-class _PreviewPane extends StatelessWidget {
+class _PreviewPane extends StatefulWidget {
   const _PreviewPane({required this.detail, required this.onPreview});
 
   final DatasetDetail detail;
   final ValueChanged<int> onPreview;
 
   @override
+  State<_PreviewPane> createState() => _PreviewPaneState();
+}
+
+class _PreviewPaneState extends State<_PreviewPane> {
+  final _indexController = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _indexController.text =
+        '${widget.detail.preview.index + 1}';
+  }
+
+  @override
+  void didUpdateWidget(_PreviewPane old) {
+    super.didUpdateWidget(old);
+    if (old.detail.preview.index != widget.detail.preview.index) {
+      _indexController.text = '${widget.detail.preview.index + 1}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _indexController.dispose();
+    super.dispose();
+  }
+
+  void _debouncedPreview(int index) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 50), () {
+      widget.onPreview(index);
+    });
+  }
+
+  void _jumpToIndex(String value) {
+    final n = int.tryParse(value);
+    if (n == null) return;
+    final total = widget.detail.preview.total;
+    final clamped = n.clamp(1, total.clamp(1, total));
+    widget.onPreview(clamped - 1);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final preview = detail.preview;
+    final preview = widget.detail.preview;
     final total = preview.total;
     return SrSection(
       title: 'LR / HR preview',
-      subtitle: total == 0
-          ? 'No preview pairs available'
-          : 'Pair ${preview.index + 1} of $total',
+      subtitle: total == 0 ? 'No preview pairs available' : 'of $total pairs',
       trailing: Wrap(
         spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          if (total > 0)
+            SizedBox(
+              width: 72,
+              child: TextField(
+                controller: _indexController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: _jumpToIndex,
+              ),
+            ),
           IconButton.outlined(
             tooltip: 'Previous pair',
             onPressed: preview.index <= 0
                 ? null
-                : () => onPreview(preview.index - 1),
+                : () => widget.onPreview(preview.index - 1),
             icon: const Icon(Icons.chevron_left),
           ),
           IconButton.outlined(
             tooltip: 'Next pair',
             onPressed: preview.index >= total - 1
                 ? null
-                : () => onPreview(preview.index + 1),
+                : () => widget.onPreview(preview.index + 1),
             icon: const Icon(Icons.chevron_right),
           ),
         ],
       ),
-      child: preview.unavailable != null
-          ? SrBanner(message: preview.unavailable!.message, severity: 'warning')
-          : Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (preview.unavailable != null)
+            SrBanner(
+              message: preview.unavailable!.message,
+              severity: 'warning',
+            )
+          else
+            Row(
               children: [
                 Expanded(
                   child: _PreviewImage(path: preview.lrPath, label: 'LR'),
@@ -1285,6 +1550,17 @@ class _PreviewPane extends StatelessWidget {
                 ),
               ],
             ),
+          if (total > 1) ...[
+            const SizedBox(height: 8),
+            Slider(
+              min: 0,
+              max: (total - 1).toDouble(),
+              value: preview.index.toDouble().clamp(0, (total - 1).toDouble()),
+              onChanged: (v) => _debouncedPreview(v.round()),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1308,39 +1584,249 @@ class _PreviewImage extends StatelessWidget {
   }
 }
 
-class _PipelineCard extends StatelessWidget {
-  const _PipelineCard({required this.detail});
+class _PipelineCard extends StatefulWidget {
+  const _PipelineCard({
+    required this.detail,
+    required this.onResynthesize,
+  });
 
   final DatasetDetail detail;
+  final Future<void> Function(Map<String, dynamic> overrides) onResynthesize;
+
+  @override
+  State<_PipelineCard> createState() => _PipelineCardState();
+}
+
+class _PipelineCardState extends State<_PipelineCard> {
+  late String _downscaleMethod;
+  late double _preBlur;
+  late double _blur;
+  late double _noise;
+  late int _jpegQuality;
+  late String _outputFormat;
+  bool _dirty = false;
+  bool _resyncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFromConfig(widget.detail.generationConfig);
+  }
+
+  @override
+  void didUpdateWidget(_PipelineCard old) {
+    super.didUpdateWidget(old);
+    if (old.detail.generationConfig != widget.detail.generationConfig &&
+        !_dirty) {
+      _initFromConfig(widget.detail.generationConfig);
+    }
+  }
+
+  void _initFromConfig(Map<String, dynamic> cfg) {
+    _downscaleMethod = cfg['downscale_method'] as String? ?? 'bicubic';
+    _preBlur = (cfg['pre_blur'] as num?)?.toDouble() ?? 0.0;
+    _blur = (cfg['blur'] as num?)?.toDouble() ?? 0.0;
+    _noise = (cfg['noise'] as num?)?.toDouble() ?? 0.0;
+    _jpegQuality = (cfg['jpeg_quality'] as num?)?.toInt() ?? 95;
+    _outputFormat = cfg['output_format'] as String? ?? 'png';
+  }
+
+  Map<String, dynamic> _buildOverrides() => {
+        'downscale_method': _downscaleMethod,
+        'pre_blur': _preBlur,
+        'blur': _blur,
+        'noise': _noise,
+        'jpeg_quality': _jpegQuality,
+        'output_format': _outputFormat,
+      };
+
+  Future<void> _resynthesize() async {
+    setState(() => _resyncing = true);
+    try {
+      await widget.onResynthesize(_buildOverrides());
+      if (mounted) setState(() => _dirty = false);
+    } finally {
+      if (mounted) setState(() => _resyncing = false);
+    }
+  }
+
+  bool get _sourceVideoOk =>
+      widget.detail.healthChecks
+          .where((h) => h.id == 'source_video')
+          .firstOrNull
+          ?.severity == 'success';
 
   @override
   Widget build(BuildContext context) {
-    final resynthesis = detail.resynthesis;
+    final isVideoGenerated =
+        widget.detail.dataset.type == 'video_generated';
+    final resynthesis = widget.detail.resynthesis;
+    final canResynthesize = _dirty && !_resyncing && _sourceVideoOk;
+
     return SrSection(
       title: 'Degradation pipeline',
-      trailing: Tooltip(
-        message: 'Coming soon — re-synthesis will be available in a future update.',
-        child: OutlinedButton.icon(
-          onPressed: null,
-          icon: const Icon(Icons.auto_fix_high),
-          label: const Text('Re-synthesize'),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (detail.degradationPipeline.isEmpty)
-            const Text('No generated degradation metadata recorded.'),
-          for (final step in detail.degradationPipeline)
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.tune),
-              title: Text(step),
+      trailing: isVideoGenerated
+          ? Tooltip(
+              message: !_sourceVideoOk
+                  ? 'Source video not found — re-synthesis unavailable'
+                  : '',
+              child: OutlinedButton.icon(
+                onPressed: canResynthesize ? _resynthesize : null,
+                icon: _resyncing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_fix_high),
+                label: const Text('Re-synthesize'),
+              ),
+            )
+          : null,
+      child: isVideoGenerated
+          ? _buildVideoControls()
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.detail.degradationPipeline.isEmpty)
+                  const Text('No generation metadata — paired dataset.')
+                else
+                  for (final step in widget.detail.degradationPipeline)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.tune),
+                      title: Text(step),
+                    ),
+                if (resynthesis != null && !resynthesis.supported)
+                  SrBanner(message: resynthesis.message, severity: 'warning'),
+              ],
             ),
-          if (resynthesis != null && !resynthesis.supported)
-            SrBanner(message: resynthesis.message, severity: 'warning'),
+    );
+  }
+
+  Widget _buildVideoControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _downscaleMethod,
+          decoration: const InputDecoration(
+            labelText: 'Downscale method',
+            isDense: true,
+          ),
+          items: const [
+            DropdownMenuItem(value: 'bicubic', child: Text('Bicubic')),
+            DropdownMenuItem(value: 'bilinear', child: Text('Bilinear')),
+            DropdownMenuItem(value: 'lanczos', child: Text('Lanczos')),
+            DropdownMenuItem(value: 'nearest', child: Text('Nearest')),
+            DropdownMenuItem(value: 'area', child: Text('Area (box)')),
+          ],
+          onChanged: (v) {
+            if (v != null) setState(() { _downscaleMethod = v; _dirty = true; });
+          },
+        ),
+        const SizedBox(height: 12),
+        _SliderRow(
+          label: 'Pre-blur σ',
+          value: _preBlur,
+          min: 0,
+          max: 3.0,
+          divisions: 30,
+          onChanged: (v) => setState(() { _preBlur = v; _dirty = true; }),
+        ),
+        _SliderRow(
+          label: 'Post-blur σ',
+          value: _blur,
+          min: 0,
+          max: 5.0,
+          divisions: 50,
+          onChanged: (v) => setState(() { _blur = v; _dirty = true; }),
+        ),
+        _SliderRow(
+          label: 'Noise',
+          value: _noise,
+          min: 0,
+          max: 50.0,
+          divisions: 50,
+          onChanged: (v) => setState(() { _noise = v; _dirty = true; }),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _outputFormat,
+          decoration: const InputDecoration(
+            labelText: 'Output format',
+            isDense: true,
+          ),
+          items: const [
+            DropdownMenuItem(value: 'png', child: Text('PNG (lossless)')),
+            DropdownMenuItem(value: 'jpg', child: Text('JPEG')),
+          ],
+          onChanged: (v) {
+            if (v != null) setState(() { _outputFormat = v; _dirty = true; });
+          },
+        ),
+        if (_outputFormat == 'jpg') ...[
+          const SizedBox(height: 8),
+          _SliderRow(
+            label: 'JPEG quality',
+            value: _jpegQuality.toDouble(),
+            min: 1,
+            max: 100,
+            divisions: 99,
+            onChanged: (v) =>
+                setState(() { _jpegQuality = v.round(); _dirty = true; }),
+          ),
         ],
-      ),
+      ],
+    );
+  }
+}
+
+class _SliderRow extends StatelessWidget {
+  const _SliderRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    this.divisions,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            value == value.truncateToDouble()
+                ? value.toStringAsFixed(0)
+                : value.toStringAsFixed(1),
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1387,6 +1873,120 @@ class _HistogramCard extends StatelessWidget {
             ),
     );
   }
+}
+
+class _DatasetMetadataCard extends StatelessWidget {
+  const _DatasetMetadataCard({required this.detail});
+
+  final DatasetDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = detail.dataset;
+    final cfg = detail.generationConfig;
+    final rows = <_MetaRow>[];
+
+    rows.add(_MetaRow(label: 'Type', value: ds.type.replaceAll('_', ' ')));
+    rows.add(_MetaRow(label: 'Scale', value: 'x${ds.scale}'));
+    rows.add(_MetaRow(label: 'Pairs', value: '${ds.pairCount}'));
+    rows.add(_MetaRow(label: 'Validation', value: ds.validationMode));
+
+    if (ds.formatCounts.isNotEmpty) {
+      final fmt = ds.formatCounts.entries
+          .map((e) => '${e.key.toUpperCase()}: ${e.value}')
+          .join(', ');
+      rows.add(_MetaRow(label: 'Formats', value: fmt));
+    }
+
+    final minRes = ds.minHrResolution;
+    final maxRes = ds.maxHrResolution;
+    if (minRes != null && maxRes != null) {
+      final minStr = '${minRes[0]}×${minRes[1]}';
+      final maxStr = '${maxRes[0]}×${maxRes[1]}';
+      rows.add(_MetaRow(
+        label: 'HR resolution',
+        value: minStr == maxStr ? minStr : '$minStr – $maxStr',
+      ));
+    }
+
+    if (ds.consistentAspectRatio != null) {
+      rows.add(_MetaRow(
+        label: 'Aspect ratio',
+        value: ds.consistentAspectRatio! ? 'Consistent' : 'Mixed',
+        severity: ds.consistentAspectRatio! ? null : 'warning',
+      ));
+    }
+
+    if (ds.blackPairCount > 0) {
+      rows.add(_MetaRow(
+        label: 'Black pairs',
+        value: '${ds.blackPairCount}',
+        severity: 'warning',
+      ));
+    }
+
+    if (cfg.isNotEmpty) {
+      final method = cfg['downscale_method'] as String?;
+      if (method != null) rows.add(_MetaRow(label: 'Downscale', value: method));
+      final preBlur = (cfg['pre_blur'] as num?)?.toDouble() ?? 0;
+      if (preBlur > 0) {
+        rows.add(_MetaRow(label: 'Pre-blur σ', value: preBlur.toStringAsFixed(1)));
+      }
+      final blur = (cfg['blur'] as num?)?.toDouble() ?? 0;
+      if (blur > 0) {
+        rows.add(_MetaRow(label: 'Post-blur σ', value: blur.toStringAsFixed(1)));
+      }
+      final noise = (cfg['noise'] as num?)?.toDouble() ?? 0;
+      if (noise > 0) {
+        rows.add(_MetaRow(label: 'Noise', value: noise.toStringAsFixed(0)));
+      }
+      final fmt = cfg['output_format'] as String?;
+      if (fmt != null) rows.add(_MetaRow(label: 'LR format', value: fmt.toUpperCase()));
+    }
+
+    return SrSection(
+      title: 'Dataset metadata',
+      child: Column(
+        children: [
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      row.label,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: srTokens(context).muted,
+                          ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.value,
+                      style: row.severity != null
+                          ? Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: _severityColor(context, row.severity!),
+                                fontWeight: FontWeight.w600,
+                              )
+                          : Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaRow {
+  const _MetaRow({required this.label, required this.value, this.severity});
+  final String label;
+  final String value;
+  final String? severity;
 }
 
 class _HistogramPainter extends CustomPainter {

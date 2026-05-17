@@ -163,6 +163,7 @@ class DatasetDetailResponse(BaseModel):
     sources: list[DatasetSourceRow]
     health_checks: list[HealthCheckRow]
     degradation_pipeline: list[str] = Field(default_factory=list)
+    generation_config: dict[str, Any] = Field(default_factory=dict)
     preview: DatasetPreviewPair
     histogram: HistogramSummary
     rescan_action: ActionState
@@ -190,7 +191,7 @@ class ModelTemplate(BaseModel):
     parameter_count: int | None = None
     vram_estimate: str
     input_crop: int
-    support_state: Literal["supported", "unsupported"] = "unsupported"
+    support_state: Literal["supported", "unsupported", "coming_soon"] = "unsupported"
     unavailable: UnsupportedState | None = None
     architecture_steps: list[str] = Field(default_factory=list)
     hyperparameters: dict[str, Any] = Field(default_factory=dict)
@@ -411,6 +412,7 @@ def dataset_detail(project_root: Path, dataset_id: str, preview_index: int = 0) 
         sources=[source],
         health_checks=health,
         degradation_pipeline=_degradation_pipeline(dataset),
+        generation_config=dataset.generation or {},
         preview=_dataset_preview(project_root, dataset, preview_index),
         histogram=HistogramSummary(
             available=False,
@@ -418,7 +420,7 @@ def dataset_detail(project_root: Path, dataset_id: str, preview_index: int = 0) 
         ),
         rescan_action=ActionState(id="rescan", label="Re-scan", supported=True),
         export_action=ActionState(id="export", label="Export", supported=False, reason="Dataset export is not implemented yet."),
-        resynthesis=_unsupported("resynthesis_unavailable", "Re-synthesis creates a new dataset version, but this backend path is not implemented yet."),
+        resynthesis=None if dataset.type == "video_generated" else _unsupported("resynthesis_unavailable", "Re-synthesis is only available for video-generated datasets.", reason="unsupported"),
     )
 
 
@@ -496,7 +498,7 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
         best_for="Local CPU/GPU smoke tests and starter projects",
         speed_label="Fast",
         supported_scales=defaults["supported_scales"],
-        parameter_count=None,
+        parameter_count=_count_params(32, 4),
         vram_estimate="Low",
         input_crop=64,
         support_state="supported",
@@ -507,7 +509,43 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
         reset_action=ActionState(id="reset", label="Reset to defaults", supported=True),
         save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=True),
     )
-    return ModelTemplateCatalogResponse(templates=[internal], filters={"support": ["supported"], "scale": ["2", "3", "4", "8"]})
+    edsr = ModelTemplate(
+        id="edsr",
+        display_name="EDSR",
+        architecture_summary="Enhanced Deep Super-Resolution — no batch norm, residual scaling.",
+        best_for="High-quality benchmarks (NTIRE, DIV2K)",
+        speed_label="Slow",
+        supported_scales=[2, 3, 4],
+        parameter_count=_count_params(64, 16),
+        vram_estimate="High",
+        input_crop=48,
+        support_state="coming_soon",
+        architecture_steps=["RGB input", "Residual trunk (no BN)", "Upsampler", "RGB output"],
+        hyperparameters={"num_features": 64, "num_blocks": 16, "res_scale": 0.1},
+        defaults=defaults,
+        import_action=ActionState(id="import", label="Import template", supported=False),
+        reset_action=ActionState(id="reset", label="Reset to defaults", supported=False),
+        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=False),
+    )
+    rrdb = ModelTemplate(
+        id="rrdb",
+        display_name="RRDB (ESRGAN)",
+        architecture_summary="Residual-in-Residual Dense Blocks — ESRGAN backbone for perceptual quality.",
+        best_for="Perceptual / GAN-based super-resolution",
+        speed_label="Very slow",
+        supported_scales=[2, 4],
+        parameter_count=_count_params(64, 23),
+        vram_estimate="Very high",
+        input_crop=32,
+        support_state="coming_soon",
+        architecture_steps=["RGB input", "RRDB trunk", "Upsampler", "RGB output"],
+        hyperparameters={"num_features": 64, "num_blocks": 23},
+        defaults=defaults,
+        import_action=ActionState(id="import", label="Import template", supported=False),
+        reset_action=ActionState(id="reset", label="Reset to defaults", supported=False),
+        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=False),
+    )
+    return ModelTemplateCatalogResponse(templates=[internal, edsr, rrdb], filters={"support": ["supported", "coming_soon"], "scale": ["2", "3", "4", "8"]})
 
 
 def save_template_as_model(project_root: Path, template_id: str, name: str, num_features: int = 32, num_blocks: int = 4) -> ProjectState:
@@ -568,6 +606,10 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
     )
 
 
+def _count_params(features: int, blocks: int) -> int:
+    return (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+
+
 def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:
     crop = 64
     model_scale = model.scale or 4
@@ -581,7 +623,7 @@ def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> i
     activation_layers = blocks * 18 + 20
     residual_activation_values = batch * features * lr_pixels * activation_layers
     image_activation_values = batch * 18 * hr_pixels
-    parameter_values = (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+    parameter_values = _count_params(features, blocks)
     optimizer_multiplier = 3 if request.precision == "float32" else 2
     tensor_bytes = (
         (residual_activation_values + image_activation_values) * bytes_per_value
@@ -607,7 +649,7 @@ def _estimate_ram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> in
     bytes_per_value = 2 if request.precision == "mixed" else 4
 
     # Model parameters in CPU memory (always resident)
-    param_count = (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+    param_count = _count_params(features, blocks)
     param_bytes = param_count * bytes_per_value * 2  # params + gradients
 
     # Optimizer state (Adam keeps 2x extra moments)
@@ -788,12 +830,53 @@ def _find_model(project: ProjectState, model_id: str) -> ModelObject:
 
 
 def _dataset_health_checks(dataset: DatasetObject) -> list[HealthCheckRow]:
+    v = dataset.validation
     checks = [
-        HealthCheckRow(id="pairs", label="Matched pairs", severity="success" if dataset.validation.pair_count else "error", message=f"{dataset.validation.pair_count} matched pairs."),
-        HealthCheckRow(id="scale", label="Scale alignment", severity="success" if dataset.validation.validated_scale else "warning", message=f"Declared x{dataset.declared_scale}."),
+        HealthCheckRow(id="pairs", label="Matched pairs", severity="success" if v.pair_count else "error", message=f"{v.pair_count} matched pairs."),
+        HealthCheckRow(id="scale", label="Scale alignment", severity="success" if v.validated_scale else "warning", message=f"Declared x{dataset.declared_scale}."),
     ]
-    checks.extend(HealthCheckRow(id=f"error_{index}", label="Validation error", severity="error", message=message) for index, message in enumerate(dataset.validation.errors))
-    checks.extend(HealthCheckRow(id=f"warning_{index}", label="Validation warning", severity="warning", message=message) for index, message in enumerate(dataset.validation.warnings))
+    # source video availability (video_generated datasets only)
+    if dataset.type == "video_generated":
+        source_path = (dataset.generation or {}).get("source_video")
+        if not source_path:
+            checks.append(HealthCheckRow(id="source_video", label="Source video", severity="warning", message="No source video path recorded — re-synthesis unavailable."))
+        elif not Path(source_path).expanduser().resolve().is_file():
+            checks.append(HealthCheckRow(id="source_video", label="Source video", severity="warning", message=f"Source video not found at {source_path} — re-synthesis unavailable."))
+        else:
+            checks.append(HealthCheckRow(id="source_video", label="Source video", severity="success", message=f"Source video available."))
+    # pair count quality
+    if v.pair_count > 0:
+        if v.pair_count < 100:
+            checks.append(HealthCheckRow(id="pair_count_quality", label="Pair count quality", severity="warning", message=f"{v.pair_count} pairs may not generalize — 200+ recommended."))
+        else:
+            checks.append(HealthCheckRow(id="pair_count_quality", label="Pair count quality", severity="success", message=f"{v.pair_count} pairs collected."))
+    # format consistency
+    if v.format_counts:
+        if len(v.format_counts) > 1:
+            fmt_list = ", ".join(f"{ext} ({n})" for ext, n in v.format_counts.items())
+            checks.append(HealthCheckRow(id="format_consistency", label="Format consistency", severity="warning", message=f"Mixed formats detected: {fmt_list}."))
+        else:
+            ext = next(iter(v.format_counts))
+            checks.append(HealthCheckRow(id="format_consistency", label="Format consistency", severity="success", message=f"All images are {ext.upper()}."))
+    # resolution
+    if v.min_hr_resolution is not None and v.max_hr_resolution is not None:
+        min_w, min_h = v.min_hr_resolution
+        max_w, max_h = v.max_hr_resolution
+        if min_w < 128 or min_h < 128:
+            checks.append(HealthCheckRow(id="resolution", label="Resolution", severity="warning", message=f"Smallest HR image is {min_w}×{min_h} — images below 128px may not train well."))
+        else:
+            checks.append(HealthCheckRow(id="resolution", label="Resolution", severity="success", message=f"HR range {min_w}×{min_h} – {max_w}×{max_h}."))
+    # aspect ratio
+    if v.consistent_aspect_ratio is not None:
+        if v.consistent_aspect_ratio:
+            checks.append(HealthCheckRow(id="aspect_ratio", label="Aspect ratio", severity="success", message="Consistent aspect ratio across sampled pairs."))
+        else:
+            checks.append(HealthCheckRow(id="aspect_ratio", label="Aspect ratio", severity="warning", message="Inconsistent aspect ratios detected — mixed crops may affect training."))
+    # black images
+    if v.black_pair_count > 0:
+        checks.append(HealthCheckRow(id="black_images", label="Black images", severity="warning", message=f"{v.black_pair_count} near-black image pair(s) detected — consider removing them before training."))
+    checks.extend(HealthCheckRow(id=f"error_{index}", label="Validation error", severity="error", message=message) for index, message in enumerate(v.errors))
+    checks.extend(HealthCheckRow(id=f"warning_{index}", label="Validation warning", severity="warning", message=message) for index, message in enumerate(v.warnings))
     return checks
 
 
@@ -816,12 +899,15 @@ def _degradation_pipeline(dataset: DatasetObject) -> list[str]:
     generation = dataset.generation or {}
     if not generation:
         return []
-    return [
-        f"Downscale: x{dataset.scale} {generation.get('downscale_method', 'bicubic')}",
+    steps = [f"Downscale: x{dataset.scale} {generation.get('downscale_method', 'bicubic')}"]
+    if generation.get("pre_blur", 0):
+        steps.insert(0, f"Pre-blur (optical): σ={generation['pre_blur']}")
+    steps += [
         f"Blur: {generation.get('blur', 0)}",
         f"Noise: {generation.get('noise', 0)}",
         f"JPEG quality: {generation.get('jpeg_quality', 95)}",
     ]
+    return steps
 
 
 def _active_model_name(project: ProjectState, run: RunObject | None) -> str | None:

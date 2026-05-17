@@ -39,6 +39,11 @@ class DatasetValidation(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     unmatched_hr: list[str] = Field(default_factory=list)
     unmatched_lr: list[str] = Field(default_factory=list)
+    format_counts: dict[str, int] = Field(default_factory=dict)
+    min_hr_resolution: list[int] | None = None
+    max_hr_resolution: list[int] | None = None
+    consistent_aspect_ratio: bool | None = None
+    black_pair_count: int = 0
 
 
 class DatasetObject(BaseModel):
@@ -87,10 +92,20 @@ class VideoGenerationConfig(BaseModel):
     fps: float = Field(default=1.0, gt=0)
     output_format: Literal["png", "jpg"] = "png"
     downscale_method: str = "bicubic"
+    pre_blur: float = Field(default=0.0, ge=0)
     blur: float = Field(default=0.0, ge=0)
     noise: float = Field(default=0.0, ge=0)
     jpeg_quality: int = Field(default=95, ge=1, le=100)
     frame_limit: int | None = Field(default=None, gt=0)
+
+
+class ReSynthesisRequest(BaseModel):
+    downscale_method: str | None = None
+    pre_blur: float | None = None
+    blur: float | None = None
+    noise: float | None = None
+    jpeg_quality: int | None = None
+    output_format: Literal["png", "jpg"] | None = None
 
 
 class ReadinessResponse(BaseModel):
@@ -111,6 +126,18 @@ def _supported_files(folder: Path) -> dict[str, Path]:
         if path.suffix.lower().lstrip(".") in SUPPORTED_IMAGE_EXTENSIONS:
             files[path.stem] = path
     return files
+
+
+def _is_black_image(path: Path) -> int:
+    try:
+        from PIL import Image  # noqa: PLC0415
+
+        with Image.open(path) as img:
+            thumb = img.convert("L").resize((32, 32))
+            mean = sum(thumb.getdata()) / (32 * 32)
+            return 1 if mean < 8 else 0
+    except Exception:
+        return 0
 
 
 def validate_paired_dataset(dataset_root: Path, scale: int, mode: ValidationMode) -> DatasetValidation:
@@ -137,8 +164,18 @@ def validate_paired_dataset(dataset_root: Path, scale: int, mode: ValidationMode
     if unmatched_lr:
         errors.append("Some LR images do not have matching HR files.")
 
+    format_counts: dict[str, int] = {}
+    for path in hr_files.values():
+        ext = path.suffix.lower().lstrip(".")
+        format_counts[ext] = format_counts.get(ext, 0) + 1
+
+    widths: list[int] = []
+    heights: list[int] = []
+    aspect_ratios: list[float] = []
+    black_pair_count = 0
+
     sample_stems = stems if mode == "full" else stems[: min(16, len(stems))]
-    for stem in sample_stems:
+    for index, stem in enumerate(sample_stems):
         try:
             hr_info = probe_image(hr_files[stem])
             lr_info = probe_image(lr_files[stem])
@@ -149,8 +186,23 @@ def validate_paired_dataset(dataset_root: Path, scale: int, mode: ValidationMode
                     f"Scale mismatch for {stem}: HR {hr_info.width}x{hr_info.height}, "
                     f"LR {lr_info.width}x{lr_info.height}, declared x{scale}."
                 )
+            widths.append(hr_info.width)
+            heights.append(hr_info.height)
+            if hr_info.height > 0:
+                aspect_ratios.append(hr_info.width / hr_info.height)
+            if mode == "full" or index % 4 == 0:
+                black_pair_count += _is_black_image(hr_files[stem])
         except Exception as exc:
             errors.append(f"{stem}: {exc}")
+
+    min_hr_resolution = [min(widths), min(heights)] if widths else None
+    max_hr_resolution = [max(widths), max(heights)] if widths else None
+    consistent_aspect_ratio: bool | None = None
+    if len(aspect_ratios) > 1:
+        base = aspect_ratios[0]
+        consistent_aspect_ratio = base > 0 and all(abs(r - base) / base < 0.01 for r in aspect_ratios)
+    elif len(aspect_ratios) == 1:
+        consistent_aspect_ratio = True
 
     return DatasetValidation(
         usable=not errors,
@@ -163,6 +215,11 @@ def validate_paired_dataset(dataset_root: Path, scale: int, mode: ValidationMode
         warnings=warnings,
         unmatched_hr=[hr_files[stem].name for stem in unmatched_hr],
         unmatched_lr=[lr_files[stem].name for stem in unmatched_lr],
+        format_counts=format_counts,
+        min_hr_resolution=min_hr_resolution,
+        max_hr_resolution=max_hr_resolution,
+        consistent_aspect_ratio=consistent_aspect_ratio,
+        black_pair_count=black_pair_count,
     )
 
 
@@ -296,6 +353,132 @@ def _copy_or_move_dataset(source: Path, target: Path, operation: Literal["copy",
     )
 
 
+def resynthesize_dataset(
+    project_root: Path,
+    dataset_id: str,
+    request: ReSynthesisRequest,
+    *,
+    job: Job | None = None,
+    on_job: Callable[[Job], None] | None = None,
+) -> tuple[ProjectState, DatasetObject, Job]:
+    project = open_project(project_root)
+    dataset: DatasetObject | None = None
+    for raw in project.datasets:
+        if raw.get("id") == dataset_id:
+            dataset = DatasetObject.model_validate(raw)
+            break
+    if dataset is None:
+        raise ApiError(404, "dataset_not_found", "Dataset was not found.", details={"dataset_id": dataset_id})
+    if dataset.type != "video_generated":
+        raise ApiError(422, "not_video_generated", "Re-synthesis is only available for video-generated datasets.")
+    stored_gen = dataset.generation or {}
+    if not stored_gen.get("source_video"):
+        raise ApiError(422, "source_video_missing", "No source video path stored on this dataset.")
+    source = Path(stored_gen["source_video"]).expanduser().resolve()
+    if not source.is_file():
+        raise ApiError(422, "source_video_missing", "Source video file was not found.", details={"path": str(source)})
+    active = next(
+        (
+            raw
+            for raw in project.runs
+            if raw.get("dataset_id") == dataset_id
+            and raw.get("state") in {"running", "pausing", "paused", "resuming", "stopping"}
+        ),
+        None,
+    )
+    if active is not None:
+        raise ApiError(409, "dataset_in_active_run", "Dataset is used by an active run.", details={"run_id": active.get("id")})
+
+    overrides = {k: v for k, v in request.model_dump().items() if v is not None}
+    merged = {**stored_gen, **overrides}
+    config = VideoGenerationConfig.model_validate(merged)
+
+    readiness = video_readiness()
+    if not readiness.available:
+        raise ApiError(409, "video_dependency_missing", readiness.message, details={"tool": readiness.tool})
+
+    target = _resolve_dataset_folder(project_root, dataset)
+    lr_folder = target / "LR"
+    for f in lr_folder.iterdir():
+        if f.is_file():
+            f.unlink()
+
+    total_seconds = _video_progress_seconds(source, config)
+    active_job = job or Job(
+        type="dataset_resynthesis",
+        project_id=project.id,
+        object_id=dataset_id,
+        status="running",
+        progress=0.02,
+        started_at=utc_now_iso(),
+        logs=[f"Re-synthesizing LR frames for dataset {dataset.name}."],
+    )
+    _publish_job(active_job, on_job)
+
+    lr_filters = []
+    if config.pre_blur > 0:
+        lr_filters.append(f"gblur=sigma={config.pre_blur}")
+    lr_filters.append(f"scale=trunc(iw/{config.scale}):trunc(ih/{config.scale}):flags={config.downscale_method}")
+    if config.blur > 0:
+        lr_filters.append(f"gblur=sigma={config.blur}")
+    if config.noise > 0:
+        lr_filters.append(f"noise=alls={config.noise}:allf=t")
+    lr_cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostats",
+        "-i",
+        str(source),
+        "-vf",
+        f"fps={config.fps}," + ",".join(lr_filters),
+    ]
+    if config.frame_limit is not None:
+        lr_cmd.extend(["-frames:v", str(config.frame_limit)])
+    if config.output_format == "jpg":
+        ffmpeg_quality = max(2, min(31, round((100 - config.jpeg_quality) / 3.2) + 2))
+        lr_cmd.extend(["-q:v", str(ffmpeg_quality)])
+    lr_cmd.extend(["-progress", "pipe:1"])
+    lr_cmd.append(str(lr_folder / f"frame_%06d.{config.output_format}"))
+
+    active_job.logs = [*active_job.logs[-49:], "Generating LR frames."]
+    _publish_job(active_job, on_job)
+    lr_code, lr_stderr = _run_ffmpeg_progress(
+        lr_cmd,
+        total_seconds=total_seconds,
+        job=active_job,
+        on_job=on_job,
+        start=0.1,
+        end=0.85,
+    )
+    if lr_code != 0:
+        raise ApiError(500, "video_lr_generation_failed", "ffmpeg failed to regenerate LR frames.", details={"stderr": lr_stderr[-2000:]})
+
+    active_job.progress = 0.9
+    active_job.logs = [*active_job.logs[-49:], "Validating regenerated pairs."]
+    _publish_job(active_job, on_job)
+
+    validation = validate_paired_dataset(target, config.scale, "full")
+    project = open_project(project_root)
+    updated_dataset: DatasetObject | None = None
+    for raw in project.datasets:
+        if raw.get("id") == dataset_id:
+            raw["generation"] = config.model_dump()
+            raw["validation"] = validation.model_dump()
+            raw["updated_at"] = utc_now_iso()
+            updated_dataset = DatasetObject.model_validate(raw)
+            break
+    write_project(project)
+
+    active_job.status = "completed"
+    active_job.progress = 1.0
+    active_job.finished_at = utc_now_iso()
+    active_job.logs = [*active_job.logs[-49:], "Re-synthesis complete."]
+    _publish_job(active_job, on_job)
+    return project, updated_dataset or dataset, active_job
+
+
 def video_readiness() -> ReadinessResponse:
     available = shutil.which("ffmpeg") is not None
     return ReadinessResponse(
@@ -367,10 +550,10 @@ def generate_video_dataset(
             "ffmpeg failed to extract video frames.",
             details={"stderr": hr_stderr[-2000:]},
         )
-    lr_filters = [
-        f"fps={request.fps}",
-        f"scale=trunc(iw/{request.scale}):trunc(ih/{request.scale}):flags={request.downscale_method}",
-    ]
+    lr_filters = [f"fps={request.fps}"]
+    if request.pre_blur > 0:
+        lr_filters.append(f"gblur=sigma={request.pre_blur}")
+    lr_filters.append(f"scale=trunc(iw/{request.scale}):trunc(ih/{request.scale}):flags={request.downscale_method}")
     if request.blur > 0:
         lr_filters.append(f"gblur=sigma={request.blur}")
     if request.noise > 0:

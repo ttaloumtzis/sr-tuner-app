@@ -113,6 +113,11 @@ class DatasetSummary {
     required this.usable,
     required this.pairCount,
     required this.validationMode,
+    this.formatCounts = const {},
+    this.minHrResolution,
+    this.maxHrResolution,
+    this.consistentAspectRatio,
+    this.blackPairCount = 0,
   });
 
   final String id;
@@ -123,10 +128,17 @@ class DatasetSummary {
   final bool usable;
   final int pairCount;
   final String validationMode;
+  final Map<String, int> formatCounts;
+  final List<int>? minHrResolution;
+  final List<int>? maxHrResolution;
+  final bool? consistentAspectRatio;
+  final int blackPairCount;
 
   factory DatasetSummary.fromJson(Map<String, dynamic> json) {
     final validation =
         json['validation'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final rawMin = validation['min_hr_resolution'] as List<dynamic>?;
+    final rawMax = validation['max_hr_resolution'] as List<dynamic>?;
     return DatasetSummary(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -136,6 +148,16 @@ class DatasetSummary {
       usable: validation['usable'] as bool? ?? false,
       pairCount: validation['pair_count'] as int? ?? 0,
       validationMode: validation['mode'] as String? ?? 'quick',
+      formatCounts: {
+        for (final e
+            in (validation['format_counts'] as Map<String, dynamic>? ?? {})
+                .entries)
+          e.key: (e.value as num).toInt(),
+      },
+      minHrResolution: rawMin?.map((e) => (e as num).toInt()).toList(),
+      maxHrResolution: rawMax?.map((e) => (e as num).toInt()).toList(),
+      consistentAspectRatio: validation['consistent_aspect_ratio'] as bool?,
+      blackPairCount: validation['black_pair_count'] as int? ?? 0,
     );
   }
 }
@@ -204,6 +226,8 @@ class ModelSummary {
     required this.numBlocks,
     required this.status,
     this.trainedCoreWeightsPath,
+    this.coreCheckpointId,
+    this.coreRunId,
     this.trainHistory,
   });
 
@@ -215,6 +239,8 @@ class ModelSummary {
   final int numBlocks;
   final String status;
   final String? trainedCoreWeightsPath;
+  final String? coreCheckpointId;
+  final String? coreRunId;
   final List<TrainHistoryEntry>? trainHistory;
 
   @override
@@ -235,6 +261,8 @@ class ModelSummary {
       numBlocks: json['num_blocks'] as int? ?? 4,
       status: json['status'] as String? ?? 'untrained',
       trainedCoreWeightsPath: json['trained_core_weights_path'] as String?,
+      coreCheckpointId: json['core_checkpoint_id'] as String?,
+      coreRunId: json['core_run_id'] as String?,
       trainHistory: [
         for (final item in rawHistory)
           TrainHistoryEntry.fromJson(item as Map<String, dynamic>),
@@ -1242,6 +1270,7 @@ class DatasetDetail {
     required this.sources,
     required this.healthChecks,
     required this.degradationPipeline,
+    required this.generationConfig,
     required this.preview,
     required this.histogram,
     required this.rescanAction,
@@ -1253,6 +1282,7 @@ class DatasetDetail {
   final List<DatasetSourceRow> sources;
   final List<HealthCheckRow> healthChecks;
   final List<String> degradationPipeline;
+  final Map<String, dynamic> generationConfig;
   final DatasetPreviewPair preview;
   final HistogramSummary histogram;
   final ActionState rescanAction;
@@ -1275,6 +1305,8 @@ class DatasetDetail {
             in json['degradation_pipeline'] as List<dynamic>? ?? const [])
           item.toString(),
       ],
+      generationConfig:
+          json['generation_config'] as Map<String, dynamic>? ?? const {},
       preview: DatasetPreviewPair.fromJson(
         json['preview'] as Map<String, dynamic>? ?? const {},
       ),

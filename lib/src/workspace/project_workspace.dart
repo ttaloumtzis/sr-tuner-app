@@ -196,6 +196,7 @@ class _ProjectWorkspaceState extends State<ProjectWorkspace>
                     client: widget.client,
                     project: widget.project,
                     onNavigateToTab: _navigateToTab,
+                    onProjectChanged: (project) => widget.onProjectChanged(project),
                     onInferenceHandoff: (checkpointId) {
                       setState(
                         () => _inferenceHandoffCheckpointId = checkpointId,

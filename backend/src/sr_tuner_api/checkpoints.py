@@ -23,6 +23,7 @@ _APP_VERSION = "0.1.0"
 class CheckpointMetadata(BaseModel):
     id: str = Field(default_factory=lambda: new_id("ckpt"))
     run_id: str
+    model_id: str = ""
     epoch: int
     iteration: int
     path: str
