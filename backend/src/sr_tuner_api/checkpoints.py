@@ -12,7 +12,7 @@ from .errors import ApiError
 from .ids import new_id
 from .jobs import Job, utc_now_iso
 from .project_store import open_project, store_asset_path, write_project
-from .runs import build_internal_sr_model
+from .runs import build_internal_sr_model, build_model
 from .schemas import ProjectState
 
 
@@ -259,7 +259,9 @@ def export_checkpoint_onnx(project_root: Path, run_id: str | None = None, checkp
             raise ApiError(422, "model_not_trained", "Model has no trained core weights.")
         num_features = model_raw.get("num_features", 32)
         num_blocks = model_raw.get("num_blocks", 4)
-        model = build_internal_sr_model(scale=output_scale, num_features=num_features, num_blocks=num_blocks)
+        from .models import ModelObject
+        _tmp = ModelObject.model_validate(model_raw)
+        model = build_model(_tmp, output_scale)
         core_path_str = model_raw.get("trained_core_weights_path")
         if core_path_str:
             core_path = Path(core_path_str)
@@ -267,7 +269,11 @@ def export_checkpoint_onnx(project_root: Path, run_id: str | None = None, checkp
                 core_path = project_root / core_path
             if core_path.exists():
                 core_state = torch.load(core_path, map_location="cpu", weights_only=False)
-                model.body.load_state_dict(core_state)
+                if any(not k.startswith("body.") for k in core_state):
+                    model.load_state_dict(core_state, strict=True)
+                else:
+                    adjusted = {k.removeprefix("body."): v for k, v in core_state.items()}
+                    model.body.load_state_dict(adjusted, strict=False)
         model.eval()
         dest = Path(destination)
         if dest.is_dir():
@@ -297,8 +303,13 @@ def export_checkpoint_onnx(project_root: Path, run_id: str | None = None, checkp
     scale = payload.get("scale", target.scale)
     num_features = model_config.get("num_features", 32)
     num_blocks = model_config.get("num_blocks", 4)
+    arch = model_config.get("architecture", "internal_residual_pixelshuffle")
+    res_scale = model_config.get("res_scale", 0.1)
 
-    model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
+    from .models import ModelObject
+    _tmp = ModelObject(name="tmp", slug="tmp", architecture=arch, res_scale=res_scale,
+                       num_features=num_features, num_blocks=num_blocks)
+    model = build_model(_tmp, scale)
     state = payload.get("model_state_dict")
     if state is not None:
         model.load_state_dict(state)
@@ -423,23 +434,18 @@ def _module_available(name: str) -> bool:
 
 
 def extract_core_weights(checkpoint_path: Path) -> dict[str, Any]:
-    """Load a checkpoint and extract only the core (body) weights, stripping head and tail layers.
+    """Load a checkpoint and return the full model state dict (all layers).
 
-    For internal_residual_pixelshuffle architecture:
-    - Head: head.weight, head.bias (first Conv2d)
-    - Core: body.* (residual blocks)
-    - Tail: tail.0.weight, tail.0.bias (last Conv2d in Sequential)
-
-    Returns the filtered state_dict (core keys only).
+    The returned dict is saved directly to disk and loaded back via
+    model.load_state_dict() so that head, body, and tail are all restored.
     """
     payload = _load_payload(checkpoint_path)
     state = payload.get("model_state_dict")
     if state is None:
         raise ApiError(422, "checkpoint_no_state", "Checkpoint has no model_state_dict.", details={"path": str(checkpoint_path)})
-    core = {k: v for k, v in state.items() if k.startswith("body.")}
-    if not core:
-        raise ApiError(422, "core_weights_empty", "No core weights found (no keys starting with 'body.').", details={"path": str(checkpoint_path)})
-    return core
+    if not state:
+        raise ApiError(422, "core_weights_empty", "Checkpoint model_state_dict is empty.", details={"path": str(checkpoint_path)})
+    return state
 
 
 def _save_core_weights(core_state: dict[str, Any], model_core_dir: Path, run_id: str) -> Path:

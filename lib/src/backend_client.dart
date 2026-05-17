@@ -347,9 +347,14 @@ class BackendClient {
     required String name,
     int numFeatures = 32,
     int numBlocks = 4,
+    double resScale = 0.1,
   }) async {
     final response = await _post(
-      '/projects/$projectId/model-templates/$templateId/save-as-model?name=${Uri.encodeQueryComponent(name)}&num_features=$numFeatures&num_blocks=$numBlocks',
+      '/projects/$projectId/model-templates/$templateId/save-as-model'
+      '?name=${Uri.encodeQueryComponent(name)}'
+      '&num_features=$numFeatures'
+      '&num_blocks=$numBlocks'
+      '&res_scale=$resScale',
       {},
     );
     return ProjectEnvelope.fromJson(response);

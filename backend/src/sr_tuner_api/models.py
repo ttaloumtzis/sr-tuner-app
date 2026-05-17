@@ -53,7 +53,8 @@ class ModelObject(BaseModel):
     id: str = Field(default_factory=lambda: new_id("model"))
     name: str
     slug: str
-    architecture: Literal["internal_residual_pixelshuffle"] = "internal_residual_pixelshuffle"
+    architecture: Literal["internal_residual_pixelshuffle", "edsr", "rrdb"] = "internal_residual_pixelshuffle"
+    res_scale: float = Field(default=0.1, ge=0.0, le=1.0)
     scale: int | None = None
     num_features: int = Field(default=32, ge=8, le=256)
     num_blocks: int = Field(default=4, ge=1, le=64)
@@ -73,8 +74,10 @@ class ModelObject(BaseModel):
 
 class CreateModelRequest(BaseModel):
     name: str
-    num_features: int = 32
-    num_blocks: int = 4
+    num_features: int = Field(default=32, ge=8, le=256)
+    num_blocks: int = Field(default=4, ge=1, le=64)
+    architecture: Literal["internal_residual_pixelshuffle", "edsr", "rrdb"] = "internal_residual_pixelshuffle"
+    res_scale: float = Field(default=0.1, ge=0.0, le=1.0)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     loss_weights: LossWeights = Field(default_factory=LossWeights)
@@ -112,6 +115,8 @@ def create_model(project_root, request: CreateModelRequest) -> tuple[ProjectStat
     model = ModelObject(
         name=request.name.strip(),
         slug=slugify(request.name),
+        architecture=request.architecture,
+        res_scale=request.res_scale,
         num_features=request.num_features,
         num_blocks=request.num_blocks,
         optimizer=request.optimizer,

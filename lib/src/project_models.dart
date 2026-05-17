@@ -225,6 +225,7 @@ class ModelSummary {
     required this.numFeatures,
     required this.numBlocks,
     required this.status,
+    this.resScale = 0.1,
     this.trainedCoreWeightsPath,
     this.coreCheckpointId,
     this.coreRunId,
@@ -238,6 +239,7 @@ class ModelSummary {
   final int numFeatures;
   final int numBlocks;
   final String status;
+  final double resScale;
   final String? trainedCoreWeightsPath;
   final String? coreCheckpointId;
   final String? coreRunId;
@@ -260,6 +262,7 @@ class ModelSummary {
       numFeatures: json['num_features'] as int? ?? 32,
       numBlocks: json['num_blocks'] as int? ?? 4,
       status: json['status'] as String? ?? 'untrained',
+      resScale: (json['res_scale'] as num?)?.toDouble() ?? 0.1,
       trainedCoreWeightsPath: json['trained_core_weights_path'] as String?,
       coreCheckpointId: json['core_checkpoint_id'] as String?,
       coreRunId: json['core_run_id'] as String?,

@@ -488,6 +488,111 @@ def build_internal_sr_model(scale: int, num_features: int, num_blocks: int):
     return InternalResidualPixelShuffleSR()
 
 
+def build_edsr(scale: int, num_features: int, num_blocks: int, res_scale: float = 0.1):
+    if not _module_available("torch"):
+        raise ApiError(409, "torch_missing", "PyTorch is required to build the EDSR model.")
+    import torch
+    from torch import nn
+
+    class _ResBlockNoBN(nn.Module):
+        def __init__(self, nf: int, rs: float) -> None:
+            super().__init__()
+            self.rs = rs
+            self.block = nn.Sequential(
+                nn.Conv2d(nf, nf, 3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(nf, nf, 3, padding=1),
+            )
+
+        def forward(self, x):
+            return x + self.block(x) * self.rs
+
+    class EDSR(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.head = nn.Conv2d(3, num_features, 3, padding=1)
+            self.body = nn.Sequential(
+                *[_ResBlockNoBN(num_features, res_scale) for _ in range(num_blocks)],
+                nn.Conv2d(num_features, num_features, 3, padding=1),
+            )
+            self.tail = nn.Sequential(
+                nn.Conv2d(num_features, 3 * scale * scale, 3, padding=1),
+                nn.PixelShuffle(scale),
+            )
+
+        def forward(self, x):
+            feat = self.head(x)
+            return torch.clamp(self.tail(feat + self.body(feat)), 0, 1)
+
+    return EDSR()
+
+
+def build_rrdb(scale: int, num_features: int, num_blocks: int, gc: int = 32):
+    if not _module_available("torch"):
+        raise ApiError(409, "torch_missing", "PyTorch is required to build the RRDBNet model.")
+    import torch
+    from torch import nn
+
+    class _DenseBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            nf = num_features
+            self.c1 = nn.Conv2d(nf, gc, 3, padding=1)
+            self.c2 = nn.Conv2d(nf + gc, gc, 3, padding=1)
+            self.c3 = nn.Conv2d(nf + 2 * gc, gc, 3, padding=1)
+            self.c4 = nn.Conv2d(nf + 3 * gc, gc, 3, padding=1)
+            self.c5 = nn.Conv2d(nf + 4 * gc, nf, 3, padding=1)
+            self.act = nn.LeakyReLU(0.2, inplace=True)
+
+        def forward(self, x):
+            x1 = self.act(self.c1(x))
+            x2 = self.act(self.c2(torch.cat([x, x1], 1)))
+            x3 = self.act(self.c3(torch.cat([x, x1, x2], 1)))
+            x4 = self.act(self.c4(torch.cat([x, x1, x2, x3], 1)))
+            return self.c5(torch.cat([x, x1, x2, x3, x4], 1)) * 0.2 + x
+
+    class _RRDB(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.rdb1 = _DenseBlock()
+            self.rdb2 = _DenseBlock()
+            self.rdb3 = _DenseBlock()
+
+        def forward(self, x):
+            return self.rdb3(self.rdb2(self.rdb1(x))) * 0.2 + x
+
+    class RRDBNet(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.head = nn.Conv2d(3, num_features, 3, padding=1)
+            self.body = nn.Sequential(
+                *[_RRDB() for _ in range(num_blocks)],
+                nn.Conv2d(num_features, num_features, 3, padding=1),
+            )
+            self.tail = nn.Sequential(
+                nn.Conv2d(num_features, 3 * scale * scale, 3, padding=1),
+                nn.PixelShuffle(scale),
+            )
+
+        def forward(self, x):
+            feat = self.head(x)
+            return torch.clamp(self.tail(feat + self.body(feat)), 0, 1)
+
+    return RRDBNet()
+
+
+def build_model(model_obj, scale: int):
+    arch = getattr(model_obj, "architecture", "internal_residual_pixelshuffle") or "internal_residual_pixelshuffle"
+    nf = getattr(model_obj, "num_features", 32)
+    nb = getattr(model_obj, "num_blocks", 4)
+    if arch == "edsr":
+        rs = getattr(model_obj, "res_scale", 0.1) or 0.1
+        return build_edsr(scale, nf, nb, res_scale=rs)
+    if arch == "rrdb":
+        return build_rrdb(scale, nf, nb)
+    return build_internal_sr_model(scale, nf, nb)
+
+
 def build_paired_sr_dataset(project_root: Path, dataset: DatasetObject, indexes: list[int] | None = None):
     if not _module_available("torch"):
         raise ApiError(409, "torch_missing", "PyTorch is required to build the training dataset.")

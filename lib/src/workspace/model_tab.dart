@@ -36,6 +36,7 @@ class _ModelTabState extends State<ModelTab> {
 
   int _features = 32;
   int _blocks = 4;
+  double _resScale = 0.1;
 
   String? _editingModelId;
   final _editNameCtrl = TextEditingController();
@@ -85,12 +86,26 @@ class _ModelTabState extends State<ModelTab> {
     });
   }
 
+  static const _templateDefaults = {
+    'internal-residual-pixelshuffle': (features: 32, blocks: 4),
+    'edsr': (features: 64, blocks: 16),
+    'rrdb': (features: 64, blocks: 23),
+  };
+
   void _selectTemplate(ModelTemplate template) {
+    final defaults = _templateDefaults[template.id];
     setState(() {
       _selected = template;
       _nameCtrl.text = template.id;
       _createMode = true;
       _editingModelId = null;
+      if (defaults != null) {
+        _features = defaults.features;
+        _blocks = defaults.blocks;
+        _featuresCtrl.text = _features.toString();
+        _blocksCtrl.text = _blocks.toString();
+      }
+      _resScale = 0.1;
     });
   }
 
@@ -105,6 +120,7 @@ class _ModelTabState extends State<ModelTab> {
         name: _nameCtrl.text.trim(),
         numFeatures: _features,
         numBlocks: _blocks,
+        resScale: _resScale,
       );
       widget.onProjectChanged(envelope.project);
       setState(() => _createMode = false);
@@ -222,6 +238,7 @@ class _ModelTabState extends State<ModelTab> {
                                 blocksCtrl: _blocksCtrl,
                                 features: _features,
                                 blocks: _blocks,
+                                resScale: _resScale,
                                 busy: _busy,
                                 selectedTemplate: _selected,
                                 onFeaturesChanged: (v) => setState(() { _features = v; _featuresCtrl.text = v.toString(); }),
@@ -234,15 +251,20 @@ class _ModelTabState extends State<ModelTab> {
                                   final v = int.tryParse(t);
                                   if (v != null && v >= 1 && v <= 64) setState(() => _blocks = v);
                                 },
+                                onResScaleChanged: (v) => setState(() => _resScale = v),
                                 onSave: _saveAsModel,
-                                onReset: () => setState(() {
-                                  _features = 32;
-                                  _blocks = 4;
-                                  _featuresCtrl.text = '32';
-                                  _blocksCtrl.text = '4';
-                                  final t = _selected;
-                                  if (t != null) _nameCtrl.text = t.id;
-                                }),
+                                onReset: () {
+                                  final defaults = _ModelTabState._templateDefaults[_selected?.id];
+                                  setState(() {
+                                    _features = defaults?.features ?? 32;
+                                    _blocks = defaults?.blocks ?? 4;
+                                    _featuresCtrl.text = _features.toString();
+                                    _blocksCtrl.text = _blocks.toString();
+                                    _resScale = 0.1;
+                                    final t = _selected;
+                                    if (t != null) _nameCtrl.text = t.id;
+                                  });
+                                },
                               )
                             : _ManagePanel(
                                 models: widget.project.models,
@@ -369,11 +391,13 @@ class _CreatePanel extends StatelessWidget {
     required this.blocksCtrl,
     required this.features,
     required this.blocks,
+    required this.resScale,
     required this.busy,
     required this.onFeaturesChanged,
     required this.onFeaturesTextChanged,
     required this.onBlocksChanged,
     required this.onBlocksTextChanged,
+    required this.onResScaleChanged,
     required this.onSave,
     required this.onReset,
     this.selectedTemplate,
@@ -384,16 +408,19 @@ class _CreatePanel extends StatelessWidget {
   final TextEditingController blocksCtrl;
   final int features;
   final int blocks;
+  final double resScale;
   final bool busy;
   final ModelTemplate? selectedTemplate;
   final ValueChanged<int> onFeaturesChanged;
   final ValueChanged<String> onFeaturesTextChanged;
   final ValueChanged<int> onBlocksChanged;
   final ValueChanged<String> onBlocksTextChanged;
+  final ValueChanged<double> onResScaleChanged;
   final VoidCallback onSave;
   final VoidCallback onReset;
 
   bool get _isSupported => selectedTemplate?.supportState == 'supported';
+  bool get _isEdsr => selectedTemplate?.id == 'edsr';
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +501,17 @@ class _CreatePanel extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (_isEdsr) ...[
+                    const SizedBox(height: 8),
+                    Text('Residual scale: ${resScale.toStringAsFixed(2)}', style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 4),
+                    Slider(
+                      min: 0.01, max: 1.0, divisions: 99,
+                      value: resScale.clamp(0.01, 1.0),
+                      label: resScale.toStringAsFixed(2),
+                      onChanged: busy ? null : onResScaleChanged,
+                    ),
+                  ],
                 ],
               ),
               SizedBox(height: tokens.gap),
@@ -503,23 +541,59 @@ class _CreatePanel extends StatelessWidget {
         SizedBox(width: tokens.gap),
         SizedBox(
           width: 260,
-          child: _HardwareEstimatePanel(features: features, blocks: blocks),
+          child: _HardwareEstimatePanel(
+            features: features,
+            blocks: blocks,
+            architecture: _archFromTemplateId(selectedTemplate?.id),
+          ),
         ),
       ],
     );
+  }
+
+  static String _archFromTemplateId(String? id) {
+    if (id == 'edsr') return 'edsr';
+    if (id == 'rrdb') return 'rrdb';
+    return 'internal_residual_pixelshuffle';
   }
 }
 
 // ── Hardware Estimate Panel ────────────────────────────────────────────────────
 
 class _HardwareEstimatePanel extends StatelessWidget {
-  const _HardwareEstimatePanel({required this.features, required this.blocks});
+  const _HardwareEstimatePanel({
+    required this.features,
+    required this.blocks,
+    this.architecture = 'internal_residual_pixelshuffle',
+  });
 
   final int features;
   final int blocks;
+  final String architecture;
 
-  static int _paramCount(int f, int b) =>
-      (f * f * b * 18) + (f * 3 * 18);
+  static int _paramCount(int f, int b, String arch) {
+    if (arch == 'edsr') {
+      const scale = 4;
+      final head = f * 3 * 9 + f;
+      final body = b * 2 * (f * f * 9 + f) + (f * f * 9 + f);
+      final tail = f * (3 * scale * scale) * 9 + (3 * scale * scale);
+      return head + body + tail;
+    }
+    if (arch == 'rrdb') {
+      const gc = 32;
+      const scale = 4;
+      final db = (f * gc * 9 + gc) +
+          ((f + gc) * gc * 9 + gc) +
+          ((f + 2 * gc) * gc * 9 + gc) +
+          ((f + 3 * gc) * gc * 9 + gc) +
+          ((f + 4 * gc) * f * 9 + f);
+      final body = b * 3 * db + (f * f * 9 + f);
+      final head = f * 3 * 9 + f;
+      final tail = f * (3 * scale * scale) * 9 + (3 * scale * scale);
+      return head + body + tail;
+    }
+    return (f * f * b * 18) + (f * 3 * 18);
+  }
 
   static String _fmtBytes(int bytes) {
     if (bytes >= 1024 * 1024 * 1024) {
@@ -534,11 +608,12 @@ class _HardwareEstimatePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    final params = _paramCount(features, blocks);
-    final paramB = params * 4;   // float32
+    final params = _paramCount(features, blocks, architecture);
+    final paramB = params * 4;
     final gradB  = params * 4;
-    final optB   = params * 4 * 2;  // Adam: first + second moment
+    final optB   = params * 4 * 2;
     final totalB = paramB + gradB + optB;
+    final nonInternal = architecture != 'internal_residual_pixelshuffle';
 
     return SrSection(
       title: 'Hardware estimate',
@@ -546,6 +621,11 @@ class _HardwareEstimatePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Row(label: 'Parameters', value: _formatCount(params), tokens: tokens, bold: true),
+          if (nonInternal)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('estimated at scale 4', style: TextStyle(fontSize: 10, color: tokens.muted)),
+            ),
           const SizedBox(height: 12),
           Text('Memory breakdown (float32)', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.muted)),
           const SizedBox(height: 6),
@@ -735,6 +815,23 @@ class _ManagePanel extends StatelessWidget {
                         icon: const Icon(Icons.delete_outline, size: 16),
                         label: const Text('Delete'),
                         style: OutlinedButton.styleFrom(foregroundColor: tokens.danger),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text('Hardware estimate', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _HardwareEstimatePanel(
+                          features: model.numFeatures,
+                          blocks: model.numBlocks,
+                          architecture: model.architecture,
+                        ),
                       ),
                     ],
                   ),

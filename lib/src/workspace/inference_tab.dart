@@ -31,9 +31,13 @@ class InferenceTab extends StatefulWidget {
   State<InferenceTab> createState() => _InferenceTabState();
 }
 
+enum _InferenceSource { model, checkpoint }
+
 class _InferenceTabState extends State<InferenceTab> {
   CheckpointAggregate? _aggregate;
   CheckpointSummary? _selectedCheckpoint;
+  ModelSummary? _selectedModel;
+  _InferenceSource _inferenceSource = _InferenceSource.checkpoint;
   String _inputPath = '';
   String? _outputDir;
   int _scale = 4;
@@ -119,15 +123,27 @@ class _InferenceTabState extends State<InferenceTab> {
     } catch (_) {}
   }
 
+  List<ModelSummary> get _trainedModels =>
+      widget.project.models.where((m) => m.status == 'trained').toList();
+
   Future<void> _loadAggregate() async {
     try {
       final aggregate = await widget.client.checkpointAggregate(widget.project.id);
       if (mounted) {
         setState(() {
           _aggregate = aggregate;
-          // Auto-select best checkpoint if none selected
           if (_selectedCheckpoint == null && aggregate.bestCheckpoint != null) {
             _selectedCheckpoint = aggregate.bestCheckpoint;
+          }
+          // Auto-select first trained model
+          final trained = _trainedModels;
+          if (_selectedModel == null && trained.isNotEmpty) {
+            _selectedModel = trained.first;
+          }
+          // Default to model-based if there are trained models but no checkpoints
+          final hasCheckpoints = aggregate.checkpoints.any((c) => !c.deleted);
+          if (!hasCheckpoints && trained.isNotEmpty) {
+            _inferenceSource = _InferenceSource.model;
           }
         });
       }
@@ -142,7 +158,8 @@ class _InferenceTabState extends State<InferenceTab> {
   @override
   Widget build(BuildContext context) {
     final checkpoints = _aggregate?.checkpoints.where((c) => !c.deleted).toList() ?? [];
-    if (checkpoints.isEmpty) {
+    final trained = _trainedModels;
+    if (checkpoints.isEmpty && trained.isEmpty) {
       return _InferenceBlockedTab(
         readiness: _readiness,
         project: widget.project,
@@ -193,28 +210,23 @@ class _InferenceTabState extends State<InferenceTab> {
             ),
           ),
         _InferenceHeader(
+          inferenceSource: _inferenceSource,
           selectedCheckpoint: _selectedCheckpoint,
           checkpoints: checkpoints,
+          selectedModel: _selectedModel,
+          trainedModels: trained,
           scale: _scale,
           tilingEnabled: _tilingEnabled,
           tileSize: _tileSize,
           device: _device,
           devices: _devices,
-          onCheckpointChanged: (checkpoint) {
-            setState(() => _selectedCheckpoint = checkpoint);
-          },
-          onScaleChanged: (scale) {
-            setState(() => _scale = scale);
-          },
-          onTilingChanged: (enabled) {
-            setState(() => _tilingEnabled = enabled);
-          },
-          onTileSizeChanged: (size) {
-            setState(() => _tileSize = size);
-          },
-          onDeviceChanged: (value) {
-            setState(() => _device = value);
-          },
+          onSourceChanged: (source) => setState(() => _inferenceSource = source),
+          onCheckpointChanged: (checkpoint) => setState(() => _selectedCheckpoint = checkpoint),
+          onModelChanged: (model) => setState(() => _selectedModel = model),
+          onScaleChanged: (scale) => setState(() => _scale = scale),
+          onTilingChanged: (enabled) => setState(() => _tilingEnabled = enabled),
+          onTileSizeChanged: (size) => setState(() => _tileSize = size),
+          onDeviceChanged: (value) => setState(() => _device = value),
           onBatchFolder: _pickBatchFolder,
           onSelectImage: _selectImage,
           onSaveResult: _saveResult,
@@ -284,7 +296,9 @@ class _InferenceTabState extends State<InferenceTab> {
   }
 
   Future<void> _runInference() async {
-    if (_selectedCheckpoint == null || _inputPath.isEmpty) return;
+    if (_inputPath.isEmpty) return;
+    if (_inferenceSource == _InferenceSource.checkpoint && _selectedCheckpoint == null) return;
+    if (_inferenceSource == _InferenceSource.model && _selectedModel == null) return;
     _stopPolling();
     setState(() {
       _running = true;
@@ -294,8 +308,10 @@ class _InferenceTabState extends State<InferenceTab> {
     try {
       final result = await widget.client.runInference(
         projectId: widget.project.id,
-        runId: _selectedCheckpoint!.runId,
-        checkpointId: _selectedCheckpoint!.id,
+        runId: _inferenceSource == _InferenceSource.checkpoint ? _selectedCheckpoint!.runId : null,
+        checkpointId: _inferenceSource == _InferenceSource.checkpoint ? _selectedCheckpoint!.id : null,
+        modelId: _inferenceSource == _InferenceSource.model ? _selectedModel!.id : null,
+        outputScale: _inferenceSource == _InferenceSource.model ? _scale : null,
         inputPath: _inputPath,
         outputDir: _outputDir,
         outputFormat: _outputFormat,
@@ -419,14 +435,19 @@ class _InferenceTabState extends State<InferenceTab> {
 
 class _InferenceHeader extends StatelessWidget {
   const _InferenceHeader({
+    required this.inferenceSource,
     required this.selectedCheckpoint,
     required this.checkpoints,
+    required this.selectedModel,
+    required this.trainedModels,
     required this.scale,
     required this.tilingEnabled,
     required this.tileSize,
     required this.device,
     required this.devices,
+    required this.onSourceChanged,
     required this.onCheckpointChanged,
+    required this.onModelChanged,
     required this.onScaleChanged,
     required this.onTilingChanged,
     required this.onTileSizeChanged,
@@ -440,14 +461,19 @@ class _InferenceHeader extends StatelessWidget {
     required this.onCancel,
   });
 
+  final _InferenceSource inferenceSource;
   final CheckpointSummary? selectedCheckpoint;
   final List<CheckpointSummary> checkpoints;
+  final ModelSummary? selectedModel;
+  final List<ModelSummary> trainedModels;
   final int scale;
   final bool tilingEnabled;
   final int tileSize;
   final String device;
   final List<DeviceOption> devices;
+  final ValueChanged<_InferenceSource> onSourceChanged;
   final ValueChanged<CheckpointSummary> onCheckpointChanged;
+  final ValueChanged<ModelSummary> onModelChanged;
   final ValueChanged<int> onScaleChanged;
   final ValueChanged<bool> onTilingChanged;
   final ValueChanged<int> onTileSizeChanged;
@@ -463,7 +489,8 @@ class _InferenceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
+    final isModel = inferenceSource == _InferenceSource.model;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -471,24 +498,45 @@ class _InferenceHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: 260,
-            child: _ModelField(
-              selectedCheckpoint: selectedCheckpoint,
-              checkpoints: checkpoints,
-              onChanged: onCheckpointChanged,
+          // Source toggle
+          SegmentedButton<_InferenceSource>(
+            segments: const [
+              ButtonSegment(value: _InferenceSource.model, label: Text('Model')),
+              ButtonSegment(value: _InferenceSource.checkpoint, label: Text('Checkpoint')),
+            ],
+            selected: {inferenceSource},
+            onSelectionChanged: (s) => onSourceChanged(s.first),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity(horizontal: -2, vertical: -2),
             ),
           ),
           const SizedBox(width: 12),
-          
+
+          // Model or checkpoint picker
           SizedBox(
-            width: 80,
-            child: _ScaleField(
-              scale: scale,
-              onChanged: onScaleChanged,
-            ),
+            width: 220,
+            child: isModel
+                ? _ModelPicker(
+                    selectedModel: selectedModel,
+                    models: trainedModels,
+                    onChanged: onModelChanged,
+                  )
+                : _CheckpointPicker(
+                    selectedCheckpoint: selectedCheckpoint,
+                    checkpoints: checkpoints,
+                    onChanged: onCheckpointChanged,
+                  ),
           ),
           const SizedBox(width: 12),
+
+          // Scale (always visible for model mode; hidden for checkpoint since scale is baked in)
+          if (isModel) ...[
+            SizedBox(
+              width: 80,
+              child: _ScaleField(scale: scale, onChanged: onScaleChanged),
+            ),
+            const SizedBox(width: 12),
+          ],
           
           SizedBox(
             width: 140,
@@ -582,8 +630,48 @@ class _InferenceHeader extends StatelessWidget {
   }
 }
 
-class _ModelField extends StatelessWidget {
-  const _ModelField({
+class _ModelPicker extends StatelessWidget {
+  const _ModelPicker({
+    required this.selectedModel,
+    required this.models,
+    required this.onChanged,
+  });
+
+  final ModelSummary? selectedModel;
+  final List<ModelSummary> models;
+  final ValueChanged<ModelSummary> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<SrTokens>()!;
+    if (models.isEmpty) {
+      return Text(
+        'No trained models',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.muted),
+      );
+    }
+    return DropdownButtonFormField<ModelSummary>(
+      value: selectedModel,
+      isExpanded: true,
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'Model',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.accent)),
+      ),
+      items: models.map((m) => DropdownMenuItem(
+        value: m,
+        child: Text('${m.name} · ${m.architecture.split('_').first}', overflow: TextOverflow.ellipsis),
+      )).toList(),
+      onChanged: (m) { if (m != null) onChanged(m); },
+    );
+  }
+}
+
+class _CheckpointPicker extends StatelessWidget {
+  const _CheckpointPicker({
     required this.selectedCheckpoint,
     required this.checkpoints,
     required this.onChanged,
@@ -596,51 +684,28 @@ class _ModelField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Model',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: tokens.muted,
+    return DropdownButtonFormField<CheckpointSummary>(
+      value: selectedCheckpoint,
+      isExpanded: true,
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'Checkpoint',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(tokens.radius), borderSide: BorderSide(color: tokens.accent)),
+      ),
+      items: checkpoints.map((c) {
+        final isBest = c.tags.contains('best_psnr');
+        return DropdownMenuItem(
+          value: c,
+          child: Text(
+            'Ep ${c.epoch}${isBest ? ' · best' : ''} · ×${c.scale}',
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 4),
-        DropdownButtonFormField<CheckpointSummary>(
-          value: selectedCheckpoint,
-          isExpanded: true,
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radius),
-              borderSide: BorderSide(color: tokens.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radius),
-              borderSide: BorderSide(color: tokens.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radius),
-              borderSide: BorderSide(color: tokens.accent),
-            ),
-          ),
-          items: checkpoints.map((checkpoint) {
-            final isBest = checkpoint.tags.contains('best_psnr');
-            return DropdownMenuItem(
-              value: checkpoint,
-              child: Text(
-                '${checkpoint.path.split('/').last}${isBest ? ' · best' : ''}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            );
-          }).toList(),
-          onChanged: (checkpoint) {
-            if (checkpoint != null) onChanged(checkpoint);
-          },
-        ),
-      ],
+        );
+      }).toList(),
+      onChanged: (c) { if (c != null) onChanged(c); },
     );
   }
 }
@@ -798,16 +863,13 @@ class _CompareViewer extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  SrChip(
-                    label: 'before · 480 × 320',
-                    kind: SrChipKind.default_,
-                  ),
+                  SrChip(label: 'before', kind: SrChipKind.default_),
                   const SizedBox(width: 6),
                   Icon(Icons.arrow_right, size: 12, color: tokens.muted),
                   const SizedBox(width: 6),
                   SrChip(
-                    label: 'after · 1920 × 1280',
-                    kind: SrChipKind.ok,
+                    label: lastResult != null ? 'after · ×${lastResult!.scale}' : 'after',
+                    kind: lastResult != null ? SrChipKind.ok : SrChipKind.default_,
                   ),
                 ],
               ),
@@ -872,65 +934,97 @@ class _SliderViewer extends StatefulWidget {
 }
 
 class _SliderViewerState extends State<_SliderViewer> {
+  double _zoom = 1.0;
+  bool _ctrlPressed = false;
+
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<SrTokens>()!;
     final hasInput = widget.inputPath.isNotEmpty || (widget.lastResult?.inputPath.isNotEmpty ?? false);
     final hasOutput = widget.lastResult?.outputPath != null;
+    final inputFile = File(widget.lastResult?.inputPath ?? widget.inputPath);
+    final outputFile = hasOutput ? File(widget.lastResult!.outputPath!) : null;
+
+    Widget zoomedImage(File? file, String fallback) {
+      return Transform.scale(
+        scale: _zoom,
+        child: file != null
+            ? Image.file(file, fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    Center(child: Text(fallback, style: TextStyle(color: tokens.muted))))
+            : Center(child: Text(fallback, style: TextStyle(color: tokens.muted))),
+      );
+    }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(tokens.radius),
       child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: tokens.border),
-        ),
+        decoration: BoxDecoration(border: Border.all(color: tokens.border)),
         clipBehavior: Clip.antiAlias,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            return GestureDetector(
-              onHorizontalDragUpdate: (details) {
-                widget.onPositionChanged((details.localPosition.dx / width).clamp(0.0, 1.0));
-              },
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (hasInput)
-                    Image.file(
-                      File(widget.lastResult?.inputPath ?? widget.inputPath),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Text('Input not found', style: TextStyle(color: tokens.muted)),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Text('Select an image', style: TextStyle(color: tokens.muted)),
-                    ),
-                  if (hasOutput)
-                    ClipRect(
-                      clipper: _SliderClipper(widget.position),
-                      child: Image.file(
-                        File(widget.lastResult!.outputPath!),
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  if (hasOutput)
-                    Positioned(
-                      left: widget.position * width - 1,
-                      top: 0,
-                      bottom: 0,
-                      width: 2,
-                      child: Container(color: tokens.accent),
-                    ),
-                  if (hasOutput) ...[
-                    Positioned(top: 6, left: 6, child: SrChip(label: 'BEFORE', kind: SrChipKind.default_)),
-                    Positioned(top: 6, right: 6, child: SrChip(label: 'AFTER', kind: SrChipKind.ok)),
-                  ],
-                ],
-              ),
-            );
+        child: Focus(
+          autofocus: false,
+          onKeyEvent: (_, event) {
+            if (event.logicalKey == LogicalKeyboardKey.controlLeft ||
+                event.logicalKey == LogicalKeyboardKey.controlRight) {
+              _ctrlPressed = event is KeyDownEvent;
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
           },
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent && _ctrlPressed) {
+                setState(() {
+                  _zoom = (_zoom * (event.scrollDelta.dy < 0 ? 1.1 : 0.9)).clamp(1.0, 16.0);
+                });
+              }
+            },
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                return GestureDetector(
+                  // Full-width drag updates slider position using absolute localPosition
+                  // so the divider tracks the pointer without accumulated drift.
+                  onHorizontalDragUpdate: (d) {
+                    widget.onPositionChanged(
+                        (d.localPosition.dx / width).clamp(0.0, 1.0));
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hasInput)
+                        zoomedImage(inputFile, 'Input not found')
+                      else
+                        Center(child: Text('Select an image', style: TextStyle(color: tokens.muted))),
+
+                      if (hasOutput)
+                        ClipRect(
+                          clipper: _SliderClipper(widget.position),
+                          child: zoomedImage(outputFile, 'Output not found'),
+                        ),
+
+                      if (hasOutput)
+                        Positioned(
+                          left: widget.position * width - 1,
+                          top: 0,
+                          bottom: 0,
+                          width: 2,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.resizeColumn,
+                            child: Container(color: tokens.accent),
+                          ),
+                        ),
+
+                      if (hasOutput) ...[
+                        Positioned(top: 6, left: 6, child: SrChip(label: 'BEFORE', kind: SrChipKind.default_)),
+                        Positioned(top: 6, right: 6, child: SrChip(label: 'AFTER', kind: SrChipKind.ok)),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -970,19 +1064,64 @@ class _TwoUpViewer extends StatefulWidget {
 }
 
 class _TwoUpViewerState extends State<_TwoUpViewer> {
-  final _transform = TransformationController();
+  final _leftTransform = TransformationController();
+  final _rightTransform = TransformationController();
+  // track which panel the cursor is over so Ctrl+scroll targets the right one
+  bool _hoverLeft = false;
   bool _ctrlPressed = false;
 
-  void _onScale(double scale) {
-    final current = _transform.value;
-    final newScale = (current.getMaxScaleOnAxis() * scale).clamp(1.0, 16.0);
-    _transform.value = Matrix4.diagonal3Values(newScale, newScale, 1);
+  void _zoom(TransformationController ctrl, double factor) {
+    final newScale = (ctrl.value.getMaxScaleOnAxis() * factor).clamp(1.0, 16.0);
+    ctrl.value = Matrix4.diagonal3Values(newScale, newScale, 1);
   }
 
   @override
   void dispose() {
-    _transform.dispose();
+    _leftTransform.dispose();
+    _rightTransform.dispose();
     super.dispose();
+  }
+
+  Widget _panel({
+    required TransformationController ctrl,
+    required Widget child,
+    required bool isLeft,
+    required SrTokens tokens,
+  }) {
+    return MouseRegion(
+      onEnter: (_) => _hoverLeft = isLeft,
+      child: Focus(
+        autofocus: isLeft,
+        onKeyEvent: (_, event) {
+          if (event.logicalKey == LogicalKeyboardKey.controlLeft ||
+              event.logicalKey == LogicalKeyboardKey.controlRight) {
+            _ctrlPressed = event is KeyDownEvent;
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent && _ctrlPressed && _hoverLeft == isLeft) {
+              _zoom(ctrl, event.scrollDelta.dy < 0 ? 1.1 : 0.9);
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(tokens.radius),
+              border: Border.all(color: tokens.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InteractiveViewer(
+              transformationController: ctrl,
+              minScale: 1.0,
+              maxScale: 16.0,
+              child: SizedBox.expand(child: child),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -991,73 +1130,40 @@ class _TwoUpViewerState extends State<_TwoUpViewer> {
     final hasInput = widget.inputPath.isNotEmpty || (widget.lastResult?.inputPath.isNotEmpty ?? false);
     final hasOutput = widget.lastResult?.outputPath != null;
 
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event.logicalKey == LogicalKeyboardKey.controlLeft ||
-            event.logicalKey == LogicalKeyboardKey.controlRight) {
-          setState(() => _ctrlPressed = event is KeyDownEvent);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Listener(
-        onPointerSignal: (event) {
-          if (event is PointerScrollEvent && _ctrlPressed) {
-            _onScale(event.scrollDelta.dy < 0 ? 1.1 : 0.9);
-          }
-        },
-        child: InteractiveViewer(
-          transformationController: _transform,
-          minScale: 1.0,
-          maxScale: 16.0,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(tokens.radius),
-                    border: Border.all(color: tokens.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: hasInput
-                      ? Image.file(
-                          File(widget.lastResult?.inputPath ?? widget.inputPath),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Text('Input not found', style: TextStyle(color: tokens.muted)),
-                          ),
-                        )
-                      : Center(
-                          child: Text('Select an image', style: TextStyle(color: tokens.muted)),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(tokens.radius),
-                    border: Border.all(color: tokens.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: hasOutput
-                      ? Image.file(
-                          File(widget.lastResult!.outputPath!),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Text('Output not found', style: TextStyle(color: tokens.muted)),
-                          ),
-                        )
-                      : Center(
-                          child: Text('No output yet', style: TextStyle(color: tokens.muted)),
-                        ),
-                ),
-              ),
-            ],
+    return Row(
+      children: [
+        Expanded(
+          child: _panel(
+            ctrl: _leftTransform,
+            isLeft: true,
+            tokens: tokens,
+            child: hasInput
+                ? Image.file(
+                    File(widget.lastResult?.inputPath ?? widget.inputPath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        Center(child: Text('Input not found', style: TextStyle(color: tokens.muted))),
+                  )
+                : Center(child: Text('Select an image', style: TextStyle(color: tokens.muted))),
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _panel(
+            ctrl: _rightTransform,
+            isLeft: false,
+            tokens: tokens,
+            child: hasOutput
+                ? Image.file(
+                    File(widget.lastResult!.outputPath!),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        Center(child: Text('Output not found', style: TextStyle(color: tokens.muted))),
+                  )
+                : Center(child: Text('No output yet', style: TextStyle(color: tokens.muted))),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1358,7 +1464,6 @@ class _InferenceBlockedTab extends StatelessWidget {
     final dataset = project.datasets.isNotEmpty ? project.datasets.first : null;
     final model = project.models.isNotEmpty ? project.models.first : null;
     final hasTraining = project.runs.isNotEmpty;
-    final hasCheckpoint = false;
     
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -1432,11 +1537,11 @@ class _InferenceBlockedTab extends StatelessWidget {
                 onGo: !hasTraining ? () => onNavigateToTab(4) : null,
               ),
               _PrerequisiteItem(
-                icon: hasCheckpoint ? Icons.check : Icons.lock,
+                icon: Icons.lock,
                 label: 'A saved checkpoint',
-                value: hasCheckpoint ? '1 / 1' : '0 / 1',
-                completed: hasCheckpoint,
-                onGo: !hasCheckpoint && hasTraining ? () => onNavigateToTab(4) : null,
+                value: '0 / 1',
+                completed: false,
+                onGo: hasTraining ? () => onNavigateToTab(4) : null,
               ),
             ],
           ),
@@ -1536,273 +1641,3 @@ class _PrerequisiteItem extends StatelessWidget {
     );
   }
 }
-
-// ── Settings panel ─────────────────────────────────────────────────────────────
-
-class _SettingsPanel extends StatelessWidget {
-  const _SettingsPanel({
-    required this.runs,
-    required this.selectedRunId,
-    required this.selectedCheckpoint,
-    required this.checkpoints,
-    required this.onRunSelected,
-    required this.onCheckpointSelected,
-    required this.inputPath,
-    required this.onPickInput,
-    required this.outputDir,
-    required this.onPickOutput,
-    required this.mode,
-    required this.onModeChanged,
-    required this.device,
-    required this.devices,
-    required this.onDeviceChanged,
-    required this.outputFormat,
-    required this.onFormatChanged,
-    required this.tilingEnabled,
-    required this.onTilingChanged,
-    required this.tileSize,
-    required this.onTileSizeChanged,
-    required this.tileOverlap,
-    required this.onTileOverlapChanged,
-    required this.paddingMode,
-    required this.onPaddingModeChanged,
-    required this.blendStrategy,
-    required this.onBlendStrategyChanged,
-    required this.readiness,
-    required this.running,
-    required this.onRun,
-  });
-
-  final List<RunSummary> runs;
-  final String? selectedRunId;
-  final CheckpointSummary? selectedCheckpoint;
-  final List<CheckpointSummary> checkpoints;
-  final ValueChanged<String> onRunSelected;
-  final ValueChanged<CheckpointSummary> onCheckpointSelected;
-  final String inputPath;
-  final VoidCallback onPickInput;
-  final String? outputDir;
-  final VoidCallback onPickOutput;
-  final String mode;
-  final ValueChanged<String> onModeChanged;
-  final String device;
-  final List<DeviceOption> devices;
-  final ValueChanged<String> onDeviceChanged;
-  final String outputFormat;
-  final ValueChanged<String> onFormatChanged;
-  final bool tilingEnabled;
-  final ValueChanged<bool> onTilingChanged;
-  final int tileSize;
-  final ValueChanged<int> onTileSizeChanged;
-  final int tileOverlap;
-  final ValueChanged<int> onTileOverlapChanged;
-  final String paddingMode;
-  final ValueChanged<String> onPaddingModeChanged;
-  final String blendStrategy;
-  final ValueChanged<String> onBlendStrategyChanged;
-  final InferenceReadiness? readiness;
-  final bool running;
-  final VoidCallback onRun;
-
-  @override
-  Widget build(BuildContext context) {
-    final ready = readiness?.available ?? false;
-
-    return Card(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Inference Settings', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 12),
-            _sectionLabel('Run', context),
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: selectedRunId,
-              isExpanded: true,
-              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
-              items: [
-                for (final run in runs)
-                  DropdownMenuItem(value: run.id, child: Text(run.name, overflow: TextOverflow.ellipsis)),
-              ],
-              onChanged: (v) { if (v != null) onRunSelected(v); },
-            ),
-            const SizedBox(height: 10),
-            _sectionLabel('Checkpoint', context),
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: selectedCheckpoint?.id,
-              isExpanded: true,
-              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
-              items: [
-                for (final c in checkpoints)
-                  DropdownMenuItem(
-                    value: c.id,
-                    child: Text('Epoch ${c.epoch}${c.tags.isNotEmpty ? " (${c.tags.join(', ')})" : ""}', overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-              onChanged: (v) {
-                if (v != null) {
-                  final match = checkpoints.firstWhere((c) => c.id == v);
-                  onCheckpointSelected(match);
-                }
-              },
-            ),
-            if (selectedCheckpoint != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('Scale: ×${selectedCheckpoint!.scale}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              ),
-            const SizedBox(height: 10),
-            _sectionLabel('Mode', context),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'single', label: Text('Single')),
-                ButtonSegment(value: 'batch', label: Text('Batch')),
-              ],
-              selected: {mode},
-              onSelectionChanged: (s) => onModeChanged(s.first),
-            ),
-            const SizedBox(height: 10),
-            _sectionLabel(mode == 'single' ? 'Input image' : 'Input folder', context),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    inputPath.isEmpty ? 'None selected' : inputPath.split('/').last,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                OutlinedButton(
-                  onPressed: onPickInput,
-                  child: const Text('Browse'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _sectionLabel('Output folder (optional)', context),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    outputDir ?? 'Default (project/inference/)',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                OutlinedButton(onPressed: onPickOutput, child: const Text('Browse')),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _sectionLabel('Device', context),
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: device,
-              isExpanded: true,
-              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
-              items: [
-                for (final d in devices)
-                  DropdownMenuItem(value: d.id, child: Text(d.label)),
-              ],
-              onChanged: (v) { if (v != null) onDeviceChanged(v); },
-            ),
-            const SizedBox(height: 10),
-            _sectionLabel('Output format', context),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'png', label: Text('PNG')),
-                ButtonSegment(value: 'jpg', label: Text('JPG')),
-              ],
-              selected: {outputFormat},
-              onSelectionChanged: (s) => onFormatChanged(s.first),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _sectionLabel('Tiling', context),
-                const Spacer(),
-                Switch(value: tilingEnabled, onChanged: onTilingChanged),
-              ],
-            ),
-            if (tilingEnabled) ...[
-              _labeledSlider('Tile size', tileSize, 64, 1024, (v) => onTileSizeChanged(v.round()), context),
-              _labeledSlider('Overlap', tileOverlap, 0, 256, (v) => onTileOverlapChanged(v.round()), context),
-              _sectionLabel('Padding', context),
-              DropdownButtonFormField<String>(
-                // ignore: deprecated_member_use
-                value: paddingMode,
-                isExpanded: true,
-                decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)),
-                items: const [
-                  DropdownMenuItem(value: 'reflect', child: Text('Reflect')),
-                  DropdownMenuItem(value: 'replicate', child: Text('Replicate')),
-                  DropdownMenuItem(value: 'constant', child: Text('Zero')),
-                ],
-                onChanged: (v) { if (v != null) onPaddingModeChanged(v); },
-              ),
-              const SizedBox(height: 8),
-              _sectionLabel('Blending', context),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'average', label: Text('Average')),
-                  ButtonSegment(value: 'linear', label: Text('Linear')),
-                ],
-                selected: {blendStrategy},
-                onSelectionChanged: (s) => onBlendStrategyChanged(s.first),
-              ),
-            ],
-            const SizedBox(height: 12),
-            if (readiness != null && !readiness!.available)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  readiness!.message,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
-                ),
-              ),
-            FilledButton.icon(
-              onPressed: running || !ready ? null : onRun,
-              icon: running
-                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.play_arrow, size: 16),
-              label: Text(running ? 'Running…' : 'Run Inference'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionLabel(String text, BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(text, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-    );
-  }
-
-  Widget _labeledSlider(String label, int value, int min, int max, ValueChanged<double> onChanged, BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(children: [
-          _sectionLabel(label, context),
-          const Spacer(),
-          Text('$value', style: const TextStyle(fontSize: 12)),
-        ]),
-        Slider(
-          value: value.toDouble().clamp(min.toDouble(), max.toDouble()),
-          min: min.toDouble(),
-          max: max.toDouble(),
-          divisions: (max - min) ~/ 32,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-}
-
-// ── Result / preview panel ─────────────────────────────────────────────────────

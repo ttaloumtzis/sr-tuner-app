@@ -15,7 +15,7 @@ from .ids import new_id
 from .jobs import Job, JobError, utc_now_iso
 from . import logging_schema as log_schema
 from .project_store import open_project, store_asset_path, write_project
-from .runs import DependencyItem, available_devices, build_internal_sr_model
+from .runs import DependencyItem, available_devices, build_internal_sr_model, build_model
 
 _log = create_component_logger(log_schema.COMPONENT_INFERENCE)
 
@@ -337,8 +337,6 @@ def _infer_single(
     import torch
     from PIL import Image
 
-    from .runs import build_internal_sr_model
-
     def _update_progress(p: float) -> None:
         if job is not None and job_store is not None:
             job.progress = p
@@ -359,7 +357,8 @@ def _infer_single(
         if cache_key in _model_cache:
             model = _model_cache[cache_key]
         else:
-            model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
+            from .models import ModelObject
+            model = build_model(ModelObject.model_validate(model_raw), scale)
             core_path_str = model_raw.get("trained_core_weights_path")
             if core_path_str:
                 core_path = Path(core_path_str)
@@ -367,8 +366,13 @@ def _infer_single(
                     core_path = project_root / core_path
                 if core_path.exists():
                     core_state = torch.load(core_path, map_location="cpu", weights_only=False)
-                    adjusted = {k.removeprefix("body."): v for k, v in core_state.items()}
-                    model.body.load_state_dict(adjusted, strict=False)
+                    # Full state dict (head + body + tail). Fall back to body-only
+                    # loading for legacy files that only contain body.* keys.
+                    if any(not k.startswith("body.") for k in core_state):
+                        model.load_state_dict(core_state, strict=True)
+                    else:
+                        adjusted = {k.removeprefix("body."): v for k, v in core_state.items()}
+                        model.body.load_state_dict(adjusted, strict=False)
             _model_cache[cache_key] = model
     else:
         checkpoint = _resolve_checkpoint(open_project(project_root), request.run_id, request.checkpoint_id)
@@ -376,7 +380,11 @@ def _infer_single(
         model_config = payload.get("model_config", {})
         num_features = model_config.get("num_features", 32)
         num_blocks = model_config.get("num_blocks", 4)
-        model = build_internal_sr_model(scale=scale, num_features=num_features, num_blocks=num_blocks)
+        arch = model_config.get("architecture", "internal_residual_pixelshuffle")
+        res_scale = model_config.get("res_scale", 0.1)
+        from .models import ModelObject
+        _tmp = ModelObject(name="tmp", slug="tmp", architecture=arch, res_scale=res_scale, num_features=num_features, num_blocks=num_blocks)
+        model = build_model(_tmp, scale)
         state = payload.get("model_state_dict")
         if state is not None:
             model.load_state_dict(state)

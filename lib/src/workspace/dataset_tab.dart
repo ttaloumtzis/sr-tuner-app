@@ -1134,7 +1134,7 @@ class _DatasetCreationProgressDialogState
   }
 }
 
-class _VideoWizard extends StatelessWidget {
+class _VideoWizard extends StatefulWidget {
   const _VideoWizard({
     required this.name,
     required this.path,
@@ -1182,16 +1182,39 @@ class _VideoWizard extends StatelessWidget {
   final VoidCallback onRefresh;
 
   @override
+  State<_VideoWizard> createState() => _VideoWizardState();
+}
+
+class _VideoWizardState extends State<_VideoWizard> {
+  // Local copies of slider/dropdown values so the dialog rebuilds immediately
+  // when the user interacts, without waiting for the parent overlay to repaint.
+  late double _preBlur;
+  late double _blur;
+  late double _noise;
+  late int _jpegQuality;
+  late String _outputFormat;
+
+  @override
+  void initState() {
+    super.initState();
+    _preBlur = widget.preBlur;
+    _blur = widget.blur;
+    _noise = widget.noise;
+    _jpegQuality = widget.jpegQuality;
+    _outputFormat = widget.outputFormat;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = srTokens(context);
-    final value = metadata;
+    final value = widget.metadata;
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
-            controller: name,
+            controller: widget.name,
             decoration: const InputDecoration(labelText: 'Dataset name'),
           ),
           SizedBox(height: tokens.compactGap),
@@ -1199,15 +1222,15 @@ class _VideoWizard extends StatelessWidget {
             children: [
               Expanded(
                 child: TextField(
-                  controller: path,
+                  controller: widget.path,
                   decoration: const InputDecoration(labelText: 'Source video'),
-                  onChanged: (_) => onRefresh(),
+                  onChanged: (_) => widget.onRefresh(),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton.outlined(
                 tooltip: 'Select video',
-                onPressed: onPickVideo,
+                onPressed: widget.onPickVideo,
                 icon: const Icon(Icons.video_file),
               ),
             ],
@@ -1217,47 +1240,43 @@ class _VideoWizard extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  initialValue: scale,
+                  initialValue: widget.scale,
                   decoration: const InputDecoration(labelText: 'Scale'),
                   items: const [2, 3, 4, 8]
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text('x$value'),
-                        ),
-                      )
+                      .map((v) => DropdownMenuItem(value: v, child: Text('x$v')))
                       .toList(),
-                  onChanged: (value) => onScaleChanged(value ?? 4),
+                  onChanged: (v) => widget.onScaleChanged(v ?? 4),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: downscaleMethod,
-                  decoration:
-                      const InputDecoration(labelText: 'Downscale method'),
+                  value: widget.downscaleMethod,
+                  decoration: const InputDecoration(labelText: 'Downscale method'),
                   items: const [
                     DropdownMenuItem(value: 'bicubic', child: Text('Bicubic')),
-                    DropdownMenuItem(
-                        value: 'bilinear', child: Text('Bilinear')),
+                    DropdownMenuItem(value: 'bilinear', child: Text('Bilinear')),
                     DropdownMenuItem(value: 'lanczos', child: Text('Lanczos')),
                     DropdownMenuItem(value: 'nearest', child: Text('Nearest')),
                     DropdownMenuItem(value: 'area', child: Text('Area')),
                   ],
-                  onChanged: (v) => onDownscaleMethodChanged(v ?? 'bicubic'),
+                  onChanged: (v) => widget.onDownscaleMethodChanged(v ?? 'bicubic'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: outputFormat,
-                  decoration:
-                      const InputDecoration(labelText: 'Output format'),
+                  value: _outputFormat,
+                  decoration: const InputDecoration(labelText: 'Output format'),
                   items: const [
                     DropdownMenuItem(value: 'png', child: Text('PNG')),
                     DropdownMenuItem(value: 'jpg', child: Text('JPEG')),
                   ],
-                  onChanged: (v) => onOutputFormatChanged(v ?? 'png'),
+                  onChanged: (v) {
+                    final fmt = v ?? 'png';
+                    setState(() => _outputFormat = fmt);
+                    widget.onOutputFormatChanged(fmt);
+                  },
                 ),
               ),
             ],
@@ -1267,63 +1286,74 @@ class _VideoWizard extends StatelessWidget {
             children: [
               Expanded(
                 child: TextField(
-                  controller: fps,
+                  controller: widget.fps,
                   decoration: InputDecoration(
                     labelText: 'Frames/sec',
                     helperText: '1–5 fps for distinct frames; higher may produce duplicates.',
                     helperMaxLines: 2,
                   ),
                   keyboardType: TextInputType.number,
-                  onChanged: (_) => onRefresh(),
+                  onChanged: (_) => widget.onRefresh(),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
-                  controller: frameLimit,
+                  controller: widget.frameLimit,
                   decoration: const InputDecoration(labelText: 'Frame limit'),
                   keyboardType: TextInputType.number,
-                  onChanged: (_) => onRefresh(),
+                  onChanged: (_) => widget.onRefresh(),
                 ),
               ),
             ],
           ),
           SizedBox(height: tokens.compactGap),
-          Text('Degradation pipeline',
-              style: Theme.of(context).textTheme.titleSmall),
+          Text('Degradation pipeline', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 4),
           _SliderRow(
             label: 'Pre-blur σ',
-            value: preBlur,
+            value: _preBlur,
             min: 0.0,
             max: 3.0,
             divisions: 30,
-            onChanged: onPreBlurChanged,
+            onChanged: (v) {
+              setState(() => _preBlur = v);
+              widget.onPreBlurChanged(v);
+            },
           ),
           _SliderRow(
             label: 'Post-blur σ',
-            value: blur,
+            value: _blur,
             min: 0.0,
             max: 5.0,
             divisions: 50,
-            onChanged: onBlurChanged,
+            onChanged: (v) {
+              setState(() => _blur = v);
+              widget.onBlurChanged(v);
+            },
           ),
           _SliderRow(
             label: 'Noise',
-            value: noise,
+            value: _noise,
             min: 0.0,
             max: 50.0,
             divisions: 50,
-            onChanged: onNoiseChanged,
+            onChanged: (v) {
+              setState(() => _noise = v);
+              widget.onNoiseChanged(v);
+            },
           ),
-          if (outputFormat == 'jpg')
+          if (_outputFormat == 'jpg')
             _SliderRow(
               label: 'JPEG quality',
-              value: jpegQuality.toDouble(),
+              value: _jpegQuality.toDouble(),
               min: 1,
               max: 100,
               divisions: 99,
-              onChanged: (v) => onJpegQualityChanged(v.round()),
+              onChanged: (v) {
+                setState(() => _jpegQuality = v.round());
+                widget.onJpegQualityChanged(v.round());
+              },
             ),
           SizedBox(height: tokens.compactGap),
           if (value != null && value.exists)
@@ -1336,11 +1366,11 @@ class _VideoWizard extends StatelessWidget {
                   SrChip(label: '${value.estimatedYield} pairs'),
                 if (value.outputSizeBytes != null)
                   SrChip(label: _formatBytes(value.outputSizeBytes!)),
-                SrChip(label: outputFormat.toUpperCase()),
-                SrChip(label: downscaleMethod),
-                if (preBlur > 0) SrChip(label: 'pre-blur σ=${preBlur.toStringAsFixed(1)}'),
-                if (blur > 0) SrChip(label: 'blur σ=${blur.toStringAsFixed(1)}'),
-                if (noise > 0) SrChip(label: 'noise=${noise.toStringAsFixed(0)}'),
+                SrChip(label: _outputFormat.toUpperCase()),
+                SrChip(label: widget.downscaleMethod),
+                if (_preBlur > 0) SrChip(label: 'pre-blur σ=${_preBlur.toStringAsFixed(1)}'),
+                if (_blur > 0) SrChip(label: 'blur σ=${_blur.toStringAsFixed(1)}'),
+                if (_noise > 0) SrChip(label: 'noise=${_noise.toStringAsFixed(0)}'),
               ],
             )
           else

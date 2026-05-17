@@ -136,6 +136,7 @@ from .runs import (
     RunSetupRequest,
     TrainingReadinessResponse,
     build_internal_sr_model,
+    build_model,
     build_paired_sr_dataset,
     delete_run_config,
     available_devices,
@@ -304,11 +305,7 @@ def _training_worker_impl(project_root: Path, run_id: str, job_id: str) -> None:
             validation_dataset = train_dataset
 
         device = torch.device(run.settings.device)
-        model_impl = build_internal_sr_model(
-            scale=dataset_scale,
-            num_features=model.num_features,
-            num_blocks=model.num_blocks,
-        ).to(device)
+        model_impl = build_model(model, dataset_scale).to(device)
 
         core_source = run.settings.source_core_weights_path
         if core_source is None and model.trained_core_weights_path and model.status == "trained":
@@ -1101,9 +1098,13 @@ def save_template_as_model_endpoint(
     name: str,
     num_features: int = 32,
     num_blocks: int = 4,
+    res_scale: float = 0.1,
     _token: None = Depends(require_session_token),
 ) -> ProjectResponse:
-    project = save_template_as_model(_session_project_path(project_id), template_id, name, num_features=num_features, num_blocks=num_blocks)
+    project = save_template_as_model(
+        _session_project_path(project_id), template_id, name,
+        num_features=num_features, num_blocks=num_blocks, res_scale=res_scale,
+    )
     return _project_response(project)
 
 

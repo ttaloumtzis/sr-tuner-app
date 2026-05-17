@@ -516,16 +516,16 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
         best_for="High-quality benchmarks (NTIRE, DIV2K)",
         speed_label="Slow",
         supported_scales=[2, 3, 4],
-        parameter_count=_count_params(64, 16),
+        parameter_count=_count_edsr_params(64, 16),
         vram_estimate="High",
         input_crop=48,
-        support_state="coming_soon",
+        support_state="supported",
         architecture_steps=["RGB input", "Residual trunk (no BN)", "Upsampler", "RGB output"],
         hyperparameters={"num_features": 64, "num_blocks": 16, "res_scale": 0.1},
         defaults=defaults,
-        import_action=ActionState(id="import", label="Import template", supported=False),
-        reset_action=ActionState(id="reset", label="Reset to defaults", supported=False),
-        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=False),
+        import_action=ActionState(id="import", label="Import template", supported=True),
+        reset_action=ActionState(id="reset", label="Reset to defaults", supported=True),
+        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=True),
     )
     rrdb = ModelTemplate(
         id="rrdb",
@@ -534,26 +534,49 @@ def model_template_catalog() -> ModelTemplateCatalogResponse:
         best_for="Perceptual / GAN-based super-resolution",
         speed_label="Very slow",
         supported_scales=[2, 4],
-        parameter_count=_count_params(64, 23),
+        parameter_count=_count_rrdb_params(64, 23),
         vram_estimate="Very high",
         input_crop=32,
-        support_state="coming_soon",
+        support_state="supported",
         architecture_steps=["RGB input", "RRDB trunk", "Upsampler", "RGB output"],
         hyperparameters={"num_features": 64, "num_blocks": 23},
         defaults=defaults,
-        import_action=ActionState(id="import", label="Import template", supported=False),
-        reset_action=ActionState(id="reset", label="Reset to defaults", supported=False),
-        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=False),
+        import_action=ActionState(id="import", label="Import template", supported=True),
+        reset_action=ActionState(id="reset", label="Reset to defaults", supported=True),
+        save_as_model_action=ActionState(id="save_as_model", label="Save as model", supported=True),
     )
     return ModelTemplateCatalogResponse(templates=[internal, edsr, rrdb], filters={"support": ["supported", "coming_soon"], "scale": ["2", "3", "4", "8"]})
 
 
-def save_template_as_model(project_root: Path, template_id: str, name: str, num_features: int = 32, num_blocks: int = 4) -> ProjectState:
-    if template_id != "internal-residual-pixelshuffle":
+_ARCH_MAP = {
+    "internal-residual-pixelshuffle": "internal_residual_pixelshuffle",
+    "edsr": "edsr",
+    "rrdb": "rrdb",
+}
+_TEMPLATE_DEFAULTS = {
+    "internal-residual-pixelshuffle": {"num_features": 32, "num_blocks": 4},
+    "edsr": {"num_features": 64, "num_blocks": 16},
+    "rrdb": {"num_features": 64, "num_blocks": 23},
+}
+
+
+def save_template_as_model(
+    project_root: Path,
+    template_id: str,
+    name: str,
+    num_features: int = 32,
+    num_blocks: int = 4,
+    res_scale: float = 0.1,
+) -> ProjectState:
+    arch = _ARCH_MAP.get(template_id)
+    if arch is None:
         raise ApiError(409, "template_unsupported", "This model template is not supported by the backend yet.", details={"template_id": template_id})
     from .models import create_model
 
-    project, _model = create_model(project_root, CreateModelRequest(name=name, num_features=num_features, num_blocks=num_blocks))
+    project, _model = create_model(
+        project_root,
+        CreateModelRequest(name=name, num_features=num_features, num_blocks=num_blocks, architecture=arch, res_scale=res_scale),
+    )
     return project
 
 
@@ -608,6 +631,31 @@ def training_estimate(project_root: Path, request: RunSetupRequest) -> TrainingE
 
 def _count_params(features: int, blocks: int) -> int:
     return (features * features * max(blocks, 1) * 18) + (features * 3 * 18)
+
+
+def _count_edsr_params(features: int, blocks: int, scale: int = 4) -> int:
+    nf = features
+    head = nf * 3 * 9 + nf
+    block_params = 2 * (nf * nf * 9 + nf)
+    body = blocks * block_params + (nf * nf * 9 + nf)
+    tail = nf * (3 * scale * scale) * 9 + (3 * scale * scale)
+    return head + body + tail
+
+
+def _count_rrdb_params(features: int, blocks: int, gc: int = 32, scale: int = 4) -> int:
+    nf = features
+    db = (
+        (nf * gc * 9 + gc)
+        + ((nf + gc) * gc * 9 + gc)
+        + ((nf + 2 * gc) * gc * 9 + gc)
+        + ((nf + 3 * gc) * gc * 9 + gc)
+        + ((nf + 4 * gc) * nf * 9 + nf)
+    )
+    rrdb = 3 * db
+    head = nf * 3 * 9 + nf
+    body = blocks * rrdb + (nf * nf * 9 + nf)
+    tail = nf * (3 * scale * scale) * 9 + (3 * scale * scale)
+    return head + body + tail
 
 
 def _estimate_vram_peak_bytes(model: ModelObject, request: RunSetupRequest) -> int:
